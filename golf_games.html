@@ -721,11 +721,12 @@
     return carry;
   }
 
-  function computeWolfPoints(){
+  function computeWolfPoints(endHole){
+    if(endHole === undefined) endHole = 18;
     var n = state.activePlayers;
     var totals = new Array(n).fill(0);
     var carry = 1;
-    for(var hole=1; hole<=18; hole++){
+    for(var hole=1; hole<=endHole; hole++){
       var entry = state.wolf[hole];
       if(!entry) continue;
       var result = entry.manual ? entry.result : autoWolfResult(hole);
@@ -748,7 +749,8 @@
   }
 
   // ---------------- DOTS LOGIC ----------------
-  function computeDotTotals(){
+  function computeDotTotals(endHole){
+    if(endHole === undefined) endHole = 18;
     var n = state.activePlayers;
     var totals = new Array(n).fill(0);
     var counts = [];
@@ -757,6 +759,7 @@
     }
     // Manual/auto-filled dots (everything except threeputt, which now comes from putts data)
     for(var h in state.dots){
+      if(parseInt(h,10) > endHole) continue;
       var holeData = state.dots[h];
       for(var pIdx in holeData){
         var pi = parseInt(pIdx,10);
@@ -772,7 +775,7 @@
       }
     }
     // 3-putt / 4-putt: derived from entered putts, paid by the putter to everyone else
-    for(var hh=1; hh<=18; hh++){
+    for(var hh=1; hh<=endHole; hh++){
       if(!state.putts[hh]) continue;
       for(var pi2=0; pi2<n; pi2++){
         var putts = puttsFor(pi2, hh);
@@ -1464,6 +1467,85 @@
     main.appendChild(card);
   }
 
+  function holeHasData(h){
+    for(var i=0;i<state.activePlayers;i++){
+      if(grossFor(i,h) !== null || puttsFor(i,h) !== null) return true;
+    }
+    var w = state.wolf[h];
+    if(w && (w.manual ? w.result : autoWolfResult(h))) return true;
+    var d = state.dots[h];
+    if(d){
+      for(var pIdx in d){ for(var k in d[pIdx]){ if(d[pIdx][k]) return true; } }
+    }
+    return false;
+  }
+
+  function fmtDollars(v){
+    var s = Math.abs(v) % 1 === 0 ? String(Math.abs(v)) : Math.abs(v).toFixed(2);
+    return (v < 0 ? "-$" : "$") + s;
+  }
+
+  function renderMoneyCard(main, names){
+    var n = state.activePlayers;
+    var lastHole = 0;
+    for(var h=1;h<=18;h++){ if(holeHasData(h)) lastHole = h; }
+
+    var card = el("div", {class:"card"});
+    card.appendChild(el("h2", {}, ["💰 Money through the round"]));
+    if(lastHole === 0){
+      card.appendChild(el("div", {class:"note"}, ["No holes played yet — the running tally builds here as scores come in."]));
+      main.appendChild(card);
+      return;
+    }
+
+    // cumulative dollars per player after each hole 1..lastHole
+    var cum = [];
+    for(var h2=1; h2<=lastHole; h2++){
+      var wp = computeWolfPoints(h2);
+      var dt = computeDotTotals(h2).totals;
+      var row = [];
+      for(var i=0;i<n;i++){ row.push((wp[i] + dt[i]) * state.dollarPerPoint); }
+      cum.push(row);
+    }
+
+    var final = cum[cum.length-1];
+    var best = Math.max.apply(null, final);
+    var leaders = [];
+    for(var li=0; li<n; li++){ if(final[li] === best) leaders.push(names[li]); }
+    card.appendChild(el("div", {class:"eyebrow"}, [
+      "Through hole " + lastHole + " — " + leaders.join(" & ") + (leaders.length>1 ? " lead" : " leads") + " at " + fmtDollars(best)
+    ]));
+
+    var scroll = el("div", {class:"card-scroll"});
+    var table = el("table", {class:"scorecard"});
+    var headRow = el("tr");
+    headRow.appendChild(el("th", {class:"label"}, [""]));
+    for(var h3=1; h3<=lastHole; h3++){ headRow.appendChild(el("th", {}, [String(h3)])); }
+    table.appendChild(headRow);
+    for(var p=0;p<n;p++){
+      (function(pi){
+        var tr = el("tr");
+        tr.appendChild(el("th", {class:"label"}, [
+          el("span", {class:"swatch", style:"background:"+SWATCHES[pi]+"; margin-right:6px; display:inline-block;"}),
+          names[pi]
+        ]));
+        for(var h=1; h<=lastHole; h++){
+          var v = cum[h-1][pi];
+          tr.appendChild(el("td", {}, [
+            el("div", {class:"sc-score" + (v>0?" birdie":v<0?" bogey":"")}, [fmtDollars(v)])
+          ]));
+        }
+        table.appendChild(tr);
+      })(p);
+    }
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+    card.appendChild(el("div", {class:"note"}, [
+      "Cumulative winnings after each hole (Wolf + Dots × $" + state.dollarPerPoint + "/pt). Swipe sideways for the full round."
+    ]));
+    main.appendChild(card);
+  }
+
   function renderSummary(main){
     var names = activeNames();
     var wolfTotals = computeWolfPoints();
@@ -1500,6 +1582,7 @@
         dCard.appendChild(row);
       });
       main.appendChild(dCard);
+      renderMoneyCard(main, names);
     }
 
     if(holder !== null){
