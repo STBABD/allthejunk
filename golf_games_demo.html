@@ -1421,7 +1421,7 @@
   });
   document.getElementById("parSelect").addEventListener("change", function(e){
     state.holePar[state.currentHole] = parseInt(e.target.value,10);
-    saveState();
+    saveState(); render();
   });
   document.getElementById("hcpSelect").addEventListener("change", function(e){
     state.holeHcp[state.currentHole] = parseInt(e.target.value,10);
