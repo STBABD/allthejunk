@@ -1086,7 +1086,8 @@
       }, [nm]));
     });
     card.appendChild(partnerRow);
-    if(entry.partners.length === 0){
+    var teams = wolfTeamsFor(hole);
+    if(teams.wolfTeam.length === 1){
       card.appendChild(el("div", {class:"note"}, ["Lone Wolf — " + names[effectiveWolf] + " vs everyone else."]));
     }
 
@@ -1097,9 +1098,8 @@
     ]));
     card.appendChild(resultLabelRow);
 
-    var wolfTeamNames = [names[effectiveWolf]].concat(entry.partners.map(function(p){ return names[p]; })).join(" & ");
-    var othersNames = [];
-    for(var i=0;i<n;i++){ if(i !== effectiveWolf && entry.partners.indexOf(i) === -1) othersNames.push(names[i]); }
+    var wolfTeamNames = teams.wolfTeam.map(function(p){ return names[p]; }).join(" & ");
+    var othersNames = teams.othersTeam.map(function(p){ return names[p]; });
     var resRow = el("div", {class:"choice-row"});
     resRow.appendChild(el("button", {
       class:"chip" + (effectiveResult==="wolfwin"?" selected":""),
