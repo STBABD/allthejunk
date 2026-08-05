@@ -938,19 +938,25 @@
         var s = strokesFor(pi, hole);
         var g = grossFor(pi, hole);
         var p = puttsFor(pi, hole);
-        var net = netFor(pi, hole);
         var thresh = puttThreshold(pi);
+        var breakdown = el("div", {class:"breakdown"});
+        function breakdownText(){
+          var net = netFor(pi, hole);
+          return (s > 0 ? ("+" + s + " stroke  ·  ") : "") +
+            (net !== null ? ("net " + net) : "net —") +
+            (thresh > 3 ? ("  ·  " + thresh + "-putt rule") : "");
+        }
+        breakdown.textContent = breakdownText();
         var row = el("div", {class:"player-row"});
         row.appendChild(el("div", {class:"swatch", style:"background:"+SWATCHES[pi]}));
         var label = el("div", {style:"flex:1;"}, [
           el("div", {style:"font-weight:600; font-size:14px;"}, [names[pi]]),
-          el("div", {class:"breakdown"}, [
-            s > 0 ? ("+" + s + " stroke  ·  ") : "",
-            net !== null ? ("net " + net) : "net —",
-            thresh > 3 ? ("  ·  " + thresh + "-putt rule") : ""
-          ])
+          breakdown
         ]);
         row.appendChild(label);
+        // no render() from these handlers — rebuilding the DOM would destroy
+        // the focused input and close the phone keyboard on every keystroke;
+        // only the net label depends on the value, so update it in place
         row.appendChild(el("input", {
           class:"hcp-input", type:"number", placeholder:"—", min:"1", max:"15",
           value: g === null ? "" : g,
@@ -958,7 +964,8 @@
             var v = e.target.value;
             var num = parseInt(v,10);
             holeScores[pi] = (v === "" || isNaN(num)) ? null : num;
-            saveState(); render();
+            breakdown.textContent = breakdownText();
+            saveState();
           }
         }));
         row.appendChild(el("input", {
@@ -968,7 +975,7 @@
             var v = e.target.value;
             var num = parseInt(v,10);
             holePutts[pi] = (v === "" || isNaN(num)) ? null : num;
-            saveState(); render();
+            saveState();
           }
         }));
         card.appendChild(row);
