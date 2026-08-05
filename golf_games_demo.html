@@ -604,6 +604,7 @@
     var entry = state.wolf[hole];
     var auto = wolfForHole(hole);
     if(!entry || !entry.wolfManual) return auto;
+    if(entry.wolf >= state.activePlayers) return auto;
     return entry.wolf;
   }
 
