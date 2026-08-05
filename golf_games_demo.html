@@ -474,7 +474,7 @@
   function blankPlayers(){ var a=[]; for(var i=0;i<MAX_PLAYERS;i++) a.push(""); return a; }
   function blankHandicaps(){ var a=[]; for(var i=0;i<MAX_PLAYERS;i++) a.push(0); return a; }
 
-  var defaultState = {"players": ["Carl", "Jamo", "Jeff", "Nelson", "Ray", ""], "handicaps": [9, 12, 13, 14, 27, 0], "activePlayers": 5, "currentHole": 1, "holePar": {"1": 4, "2": 4, "3": 3, "4": 4, "5": 4, "6": 5, "7": 4, "8": 3, "9": 5, "10": 4, "11": 3, "12": 4, "13": 5, "14": 4, "15": 4, "16": 3, "17": 4, "18": 5}, "holeHcp": {"1": 5, "2": 15, "3": 13, "4": 3, "5": 11, "6": 9, "7": 1, "8": 17, "9": 7, "10": 16, "11": 14, "12": 2, "13": 6, "14": 8, "15": 12, "16": 18, "17": 4, "18": 10}, "wolf": {"1": {"wolf": 0, "partners": [], "result": null, "manual": false, "wolfManual": false}, "2": {"wolf": 1, "partners": [2], "result": null, "manual": false, "wolfManual": false}, "3": {"wolf": 2, "partners": [], "result": null, "manual": false, "wolfManual": false}, "4": {"wolf": 3, "partners": [4], "result": null, "manual": false, "wolfManual": false}, "5": {"wolf": 4, "partners": [], "result": null, "manual": false, "wolfManual": false}, "6": {"wolf": 0, "partners": [1], "result": null, "manual": false, "wolfManual": false}, "7": {"wolf": 1, "partners": [], "result": null, "manual": false, "wolfManual": false}, "8": {"wolf": 2, "partners": [3], "result": null, "manual": false, "wolfManual": false}, "9": {"wolf": 3, "partners": [], "result": null, "manual": false, "wolfManual": false}, "10": {"wolf": 4, "partners": [0], "result": null, "manual": false, "wolfManual": false}, "11": {"wolf": 0, "partners": [], "result": null, "manual": false, "wolfManual": false}, "12": {"wolf": 1, "partners": [2], "result": null, "manual": false, "wolfManual": false}, "13": {"wolf": 2, "partners": [], "result": null, "manual": false, "wolfManual": false}, "14": {"wolf": 3, "partners": [4], "result": null, "manual": false, "wolfManual": false}, "15": {"wolf": 4, "partners": [], "result": null, "manual": false, "wolfManual": false}, "16": {"wolf": 0, "partners": [1], "result": null, "manual": false, "wolfManual": false}, "17": {"wolf": 1, "partners": [], "result": null, "manual": false, "wolfManual": false}, "18": {"wolf": 2, "partners": [3], "result": null, "manual": false, "wolfManual": false}}, "scores": {"1": {"0": 4, "1": 6, "2": 4, "3": 5, "4": 6}, "2": {"0": 4, "1": 5, "2": 6, "3": 6, "4": 5}, "3": {"0": 3, "1": 4, "2": 4, "3": 5, "4": 3}, "4": {"0": 5, "1": 5, "2": 4, "3": 5, "4": 4}, "5": {"0": 4, "1": 4, "2": 5, "3": 5, "4": 6}, "6": {"0": 4, "1": 4, "2": 6, "3": 6, "4": 8}, "7": {"0": 5, "1": 3, "2": 5, "3": 4, "4": 3}, "8": {"0": 3, "1": 4, "2": 4, "3": 4, "4": 3}, "9": {"0": 6, "1": 7, "2": 6, "3": 5, "4": 7}, "10": {"0": 5, "1": 5, "2": 6, "3": 6, "4": 6}, "11": {"0": 4, "1": 2, "2": 5, "3": 5, "4": 4}, "12": {"0": 6, "1": 6, "2": 4, "3": 4, "4": 8}, "13": {"0": 6, "1": 4, "2": 4, "3": 6, "4": 7}, "14": {"0": 5, "1": 4, "2": 5, "3": 5, "4": 5}, "15": {"0": 3, "1": 5, "2": 4, "3": 4, "4": 7}, "16": {"0": 3, "1": 5, "2": 2, "3": 2, "4": 4}, "17": {"0": 5, "1": 6, "2": 7, "3": 5, "4": 9}, "18": {"0": 6, "1": 5, "2": 4, "3": 4, "4": 4}}, "putts": {"1": {"0": 1, "1": 2, "2": 3, "3": 1, "4": 4}, "2": {"0": 2, "1": 3, "2": 2, "3": 2, "4": 4}, "3": {"0": 3, "1": 2, "2": 2, "3": 2, "4": 2}, "4": {"0": 2, "1": 1, "2": 1, "3": 1, "4": 5}, "5": {"0": 2, "1": 2, "2": 1, "3": 2, "4": 2}, "6": {"0": 2, "1": 2, "2": 2, "3": 3, "4": 4}, "7": {"0": 1, "1": 1, "2": 1, "3": 3, "4": 3}, "8": {"0": 2, "1": 1, "2": 2, "3": 2, "4": 2}, "9": {"0": 2, "1": 2, "2": 2, "3": 2, "4": 1}, "10": {"0": 2, "1": 2, "2": 4, "3": 2, "4": 1}, "11": {"0": 2, "1": 1, "2": 2, "3": 2, "4": 1}, "12": {"0": 2, "1": 2, "2": 2, "3": 2, "4": 2}, "13": {"0": 1, "1": 1, "2": 2, "3": 4, "4": 2}, "14": {"0": 2, "1": 2, "2": 1, "3": 1, "4": 1}, "15": {"0": 1, "1": 1, "2": 1, "3": 2, "4": 2}, "16": {"0": 2, "1": 2, "2": 2, "3": 1, "4": 1}, "17": {"0": 2, "1": 1, "2": 2, "3": 2, "4": 1}, "18": {"0": 2, "1": 2, "2": 1, "3": 1, "4": 1}}, "snakeEvents": [], "dots": {"1": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "2": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "3": {"0": {"greenie": true}, "1": {}, "2": {}, "3": {}, "4": {}}, "4": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "5": {"0": {}, "1": {}, "2": {}, "3": {"sandy": true}, "4": {}}, "6": {"0": {"birdie": true}, "1": {"birdie": true}, "2": {}, "3": {}, "4": {}}, "7": {"0": {}, "1": {"birdie": true}, "2": {}, "3": {}, "4": {"birdie": true}}, "8": {"0": {}, "1": {}, "2": {"greenie": true}, "3": {}, "4": {}}, "9": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "10": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "11": {"0": {}, "1": {"birdie": true, "greenie": true}, "2": {}, "3": {}, "4": {}}, "12": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "13": {"0": {"poley": true}, "1": {"birdie": true}, "2": {"birdie": true}, "3": {}, "4": {}}, "14": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "15": {"0": {"birdie": true}, "1": {}, "2": {}, "3": {}, "4": {}}, "16": {"0": {}, "1": {}, "2": {"birdie": true}, "3": {"birdie": true}, "4": {"greenie": true}}, "17": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "18": {"0": {}, "1": {}, "2": {"birdie": true}, "3": {"birdie": true}, "4": {"birdie": true}}}, "points": {"greenie": 1, "sandy": 1, "birdie": 1, "eagle": 2, "poley": 1, "threeputt": 1}, "wolfUnit": 1, "dollarPerPoint": 0};
+  var defaultState = {"players": ["Carl", "Jamo", "Jeff", "Nelson", "Ray", ""], "handicaps": [9, 12, 13, 14, 27, 0], "activePlayers": 5, "currentHole": 1, "holePar": {"1": 4, "2": 4, "3": 3, "4": 4, "5": 4, "6": 5, "7": 4, "8": 3, "9": 5, "10": 4, "11": 3, "12": 4, "13": 5, "14": 4, "15": 4, "16": 3, "17": 4, "18": 5}, "holeHcp": {"1": 5, "2": 15, "3": 13, "4": 3, "5": 11, "6": 9, "7": 1, "8": 17, "9": 7, "10": 16, "11": 14, "12": 2, "13": 6, "14": 8, "15": 12, "16": 18, "17": 4, "18": 10}, "wolf": {"1": {"wolf": 0, "partners": [], "result": null, "manual": false, "wolfManual": false}, "2": {"wolf": 1, "partners": [2], "result": null, "manual": false, "wolfManual": false}, "3": {"wolf": 2, "partners": [], "result": null, "manual": false, "wolfManual": false}, "4": {"wolf": 3, "partners": [4], "result": null, "manual": false, "wolfManual": false}, "5": {"wolf": 4, "partners": [], "result": null, "manual": false, "wolfManual": false}, "6": {"wolf": 0, "partners": [1], "result": null, "manual": false, "wolfManual": false}, "7": {"wolf": 1, "partners": [], "result": null, "manual": false, "wolfManual": false}, "8": {"wolf": 2, "partners": [3], "result": null, "manual": false, "wolfManual": false}, "9": {"wolf": 3, "partners": [], "result": null, "manual": false, "wolfManual": false}, "10": {"wolf": 4, "partners": [0], "result": null, "manual": false, "wolfManual": false}, "11": {"wolf": 0, "partners": [], "result": null, "manual": false, "wolfManual": false}, "12": {"wolf": 1, "partners": [2], "result": null, "manual": false, "wolfManual": false}, "13": {"wolf": 2, "partners": [], "result": null, "manual": false, "wolfManual": false}, "14": {"wolf": 3, "partners": [4], "result": null, "manual": false, "wolfManual": false}, "15": {"wolf": 4, "partners": [], "result": null, "manual": false, "wolfManual": false}, "16": {"wolf": 0, "partners": [1], "result": null, "manual": false, "wolfManual": false}, "17": {"wolf": 1, "partners": [], "result": null, "manual": false, "wolfManual": false}, "18": {"wolf": 2, "partners": [3], "result": null, "manual": false, "wolfManual": false}}, "scores": {"1": {"0": 4, "1": 6, "2": 4, "3": 5, "4": 6}, "2": {"0": 4, "1": 5, "2": 6, "3": 6, "4": 5}, "3": {"0": 3, "1": 4, "2": 4, "3": 5, "4": 3}, "4": {"0": 5, "1": 5, "2": 4, "3": 5, "4": 4}, "5": {"0": 4, "1": 4, "2": 5, "3": 5, "4": 6}, "6": {"0": 4, "1": 4, "2": 6, "3": 6, "4": 8}, "7": {"0": 5, "1": 3, "2": 5, "3": 4, "4": 3}, "8": {"0": 3, "1": 4, "2": 4, "3": 4, "4": 3}, "9": {"0": 6, "1": 7, "2": 6, "3": 5, "4": 7}, "10": {"0": 5, "1": 5, "2": 6, "3": 6, "4": 6}, "11": {"0": 4, "1": 2, "2": 5, "3": 5, "4": 4}, "12": {"0": 6, "1": 6, "2": 4, "3": 4, "4": 8}, "13": {"0": 6, "1": 4, "2": 4, "3": 6, "4": 7}, "14": {"0": 5, "1": 4, "2": 5, "3": 5, "4": 5}, "15": {"0": 3, "1": 5, "2": 4, "3": 4, "4": 7}, "16": {"0": 3, "1": 5, "2": 2, "3": 2, "4": 4}, "17": {"0": 5, "1": 6, "2": 7, "3": 5, "4": 9}, "18": {"0": 6, "1": 5, "2": 4, "3": 4, "4": 4}}, "putts": {"1": {"0": 1, "1": 2, "2": 3, "3": 1, "4": 4}, "2": {"0": 2, "1": 3, "2": 2, "3": 2, "4": 4}, "3": {"0": 3, "1": 2, "2": 2, "3": 2, "4": 2}, "4": {"0": 2, "1": 1, "2": 1, "3": 1, "4": 5}, "5": {"0": 2, "1": 2, "2": 1, "3": 2, "4": 2}, "6": {"0": 2, "1": 2, "2": 2, "3": 3, "4": 4}, "7": {"0": 1, "1": 1, "2": 1, "3": 3, "4": 3}, "8": {"0": 2, "1": 1, "2": 2, "3": 2, "4": 2}, "9": {"0": 2, "1": 2, "2": 2, "3": 2, "4": 1}, "10": {"0": 2, "1": 2, "2": 4, "3": 2, "4": 1}, "11": {"0": 2, "1": 1, "2": 2, "3": 2, "4": 1}, "12": {"0": 2, "1": 2, "2": 2, "3": 2, "4": 2}, "13": {"0": 1, "1": 1, "2": 2, "3": 4, "4": 2}, "14": {"0": 2, "1": 2, "2": 1, "3": 1, "4": 1}, "15": {"0": 1, "1": 1, "2": 1, "3": 2, "4": 2}, "16": {"0": 2, "1": 2, "2": 2, "3": 1, "4": 1}, "17": {"0": 2, "1": 1, "2": 2, "3": 2, "4": 1}, "18": {"0": 2, "1": 2, "2": 1, "3": 1, "4": 1}}, "snakeEvents": [], "dots": {"1": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "2": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "3": {"0": {"greenie": true}, "1": {}, "2": {}, "3": {}, "4": {}}, "4": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "5": {"0": {}, "1": {}, "2": {}, "3": {"sandy": true}, "4": {}}, "6": {"0": {"birdie": true}, "1": {"birdie": true}, "2": {}, "3": {}, "4": {}}, "7": {"0": {}, "1": {"birdie": true}, "2": {}, "3": {}, "4": {"birdie": true}}, "8": {"0": {}, "1": {}, "2": {"greenie": true}, "3": {}, "4": {}}, "9": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "10": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "11": {"0": {}, "1": {"birdie": true, "greenie": true}, "2": {}, "3": {}, "4": {}}, "12": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "13": {"0": {"poley": true}, "1": {"birdie": true}, "2": {"birdie": true}, "3": {}, "4": {}}, "14": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "15": {"0": {"birdie": true}, "1": {}, "2": {}, "3": {}, "4": {}}, "16": {"0": {}, "1": {}, "2": {"birdie": true}, "3": {"birdie": true}, "4": {"greenie": true}}, "17": {"0": {}, "1": {}, "2": {}, "3": {}, "4": {}}, "18": {"0": {}, "1": {}, "2": {"birdie": true}, "3": {"birdie": true}, "4": {"birdie": true}}}, "points": {"greenie": 1, "sandy": 1, "birdie": 1, "eagle": 2, "poley": 1, "threeputt": 1}, "wolfUnit": 1, "dollarPerPoint": 0, "snakeTieBreak": {}};
 
   var state = null;
   var activeTab = "setup";
@@ -492,6 +492,7 @@
         if(!state.holeHcp) state.holeHcp = {};
         if(!state.scores) state.scores = {};
         if(!state.putts) state.putts = {};
+        if(!state.snakeTieBreak) state.snakeTieBreak = {};
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
       } else {
         state = clone(defaultState);
@@ -570,6 +571,7 @@
   function computeSnakeEvents(){
     var n = state.activePlayers;
     var events = [];
+    var holder = null; // running holder as holes are processed in order
     for(var h=1; h<=18; h++){
       if(!state.putts[h]) continue;
       var hitters = [];
@@ -578,8 +580,29 @@
         if(putts !== null && putts >= puttThreshold(pi)) hitters.push({pi:pi, putts:putts});
       }
       if(hitters.length){
-        hitters.sort(function(a,b){ return b.putts - a.putts; });
-        events.push({hole:h, player:hitters[0].pi, putts:hitters[0].putts});
+        var maxPutts = Math.max.apply(null, hitters.map(function(x){ return x.putts; }));
+        var worst = hitters.filter(function(x){ return x.putts === maxPutts; });
+        var chosen, tied = worst.length > 1, resolved = true;
+        if(tied){
+          var tieBreak = state.snakeTieBreak[h];
+          var tieBreakValid = tieBreak !== undefined && tieBreak !== null && worst.some(function(x){ return x.pi === tieBreak; });
+          if(tieBreakValid){
+            chosen = tieBreak;
+          } else {
+            resolved = false;
+            var holderStillTied = holder !== null && worst.some(function(x){ return x.pi === holder; });
+            if(holderStillTied){
+              chosen = holder;
+            } else {
+              worst.sort(function(a,b){ return a.pi - b.pi; });
+              chosen = worst[0].pi;
+            }
+          }
+        } else {
+          chosen = worst[0].pi;
+        }
+        events.push({hole:h, player:chosen, putts:maxPutts, tied:tied, resolved: !tied || resolved, tiedPlayers: tied ? worst.map(function(x){return x.pi;}) : null});
+        holder = chosen;
       }
     }
     return events;
@@ -600,18 +623,38 @@
   // wolf was explicitly overridden by the user (entry.wolfManual). This means
   // any stale/frozen entry from earlier testing or a reordered roster heals
   // itself back to the correct rotation automatically.
+  // A hole counts as "played" once any active player has a gross score for it —
+  // this is the point past which the wolf for that hole must stop changing.
+  function isHolePlayed(hole){
+    for(var pi=0; pi<state.activePlayers; pi++){
+      if(grossFor(pi, hole) !== null) return true;
+    }
+    return false;
+  }
+
   function effectiveWolfIndex(hole){
     var entry = state.wolf[hole];
     var auto = wolfForHole(hole);
-    if(!entry || !entry.wolfManual) return auto;
-    return entry.wolf;
+    if(!entry) return auto;
+
+    if(entry.wolfManual){
+      return (entry.wolf < state.activePlayers) ? entry.wolf : auto;
+    }
+
+    if(isHolePlayed(hole)){
+      return (entry.wolf < state.activePlayers) ? entry.wolf : auto;
+    }
+
+    entry.wolf = auto;
+    return auto;
   }
 
   function wolfTeamsFor(hole){
     var entry = state.wolf[hole];
     var n = state.activePlayers;
     var wolfIdx = effectiveWolfIndex(hole);
-    var wolfTeam = [wolfIdx].concat((entry && entry.partners) || []);
+    var partners = ((entry && entry.partners) || []).filter(function(p){ return p !== wolfIdx && p < n; });
+    var wolfTeam = [wolfIdx].concat(partners);
     var othersTeam = [];
     for(var i=0;i<n;i++){ if(wolfTeam.indexOf(i) === -1) othersTeam.push(i); }
     return {wolfTeam: wolfTeam, othersTeam: othersTeam};
@@ -907,7 +950,8 @@
           value: g === null ? "" : g,
           oninput: function(e){
             var v = e.target.value;
-            holeScores[pi] = v === "" ? null : parseInt(v,10);
+            var num = parseInt(v,10);
+            holeScores[pi] = (v === "" || isNaN(num)) ? null : num;
             saveState(); render();
           }
         }));
@@ -916,7 +960,8 @@
           value: p === null ? "" : p,
           oninput: function(e){
             var v = e.target.value;
-            holePutts[pi] = v === "" ? null : parseInt(v,10);
+            var num = parseInt(v,10);
+            holePutts[pi] = (v === "" || isNaN(num)) ? null : num;
             saveState(); render();
           }
         }));
@@ -1116,9 +1161,33 @@
     });
     card.appendChild(row);
     card.appendChild(el("div", {class:"note"}, [
-      "Enter putts per player in the Score tab — the snake moves automatically to whoever hits their putt limit (worst putts on the hole wins the snake if more than one player hits it)."
+      "Enter putts per player in the Score tab — the snake moves automatically to whoever hits their putt limit. If two or more players tie on the same hole, the snake goes to whoever finished (holed out) last — tap below to say who that was."
     ]));
     main.appendChild(card);
+
+    var curEvent = events.filter(function(e){ return e.hole === hole; })[0];
+    if(curEvent && curEvent.tied){
+      var tieCard = el("div", {class:"card"}, [
+        el("h2", {}, ["🐍 Tied at " + curEvent.putts + " putts — who finished last?"])
+      ]);
+      var tieRow = el("div", {class:"choice-row"});
+      curEvent.tiedPlayers.forEach(function(pi){
+        tieRow.appendChild(el("button", {
+          class:"chip flag" + (state.snakeTieBreak[hole] === pi ? " selected" : ""),
+          onclick:function(idx){ return function(){
+            state.snakeTieBreak[hole] = idx;
+            saveState(); render();
+          }; }(pi)
+        }, [names[pi]]));
+      });
+      tieCard.appendChild(tieRow);
+      if(!curEvent.resolved){
+        tieCard.appendChild(el("div", {class:"note"}, [
+          "Not resolved yet — for now the snake is defaulting to " + names[curEvent.player] + " (whoever already held it, or earliest in player order). Tap the actual last player above to correct it."
+        ]));
+      }
+      main.appendChild(tieCard);
+    }
 
     if(events.length){
       var log = el("div", {class:"card"});
@@ -1126,7 +1195,7 @@
       var lines = events.map(function(ev,i,arr){
         var isCur = i === arr.length-1;
         return el("div", {class: isCur ? "cur" : ""}, [
-          "Hole " + ev.hole + " — " + names[ev.player] + " (" + ev.putts + " putts)" + (isCur ? " (current)" : "")
+          "Hole " + ev.hole + " — " + names[ev.player] + " (" + ev.putts + " putts" + (ev.tied ? (ev.resolved ? ", tied — resolved" : ", tied — unresolved") : "") + ")" + (isCur ? " (current)" : "")
         ]);
       });
       var logWrap = el("div", {class:"snake-log"}, lines);
@@ -1421,7 +1490,7 @@
   });
   document.getElementById("parSelect").addEventListener("change", function(e){
     state.holePar[state.currentHole] = parseInt(e.target.value,10);
-    saveState();
+    saveState(); render();
   });
   document.getElementById("hcpSelect").addEventListener("change", function(e){
     state.holeHcp[state.currentHole] = parseInt(e.target.value,10);
