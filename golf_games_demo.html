@@ -634,7 +634,8 @@
     var entry = state.wolf[hole];
     var n = state.activePlayers;
     var wolfIdx = effectiveWolfIndex(hole);
-    var wolfTeam = [wolfIdx].concat((entry && entry.partners) || []);
+    var partners = ((entry && entry.partners) || []).filter(function(p){ return p !== wolfIdx && p < n; });
+    var wolfTeam = [wolfIdx].concat(partners);
     var othersTeam = [];
     for(var i=0;i<n;i++){ if(wolfTeam.indexOf(i) === -1) othersTeam.push(i); }
     return {wolfTeam: wolfTeam, othersTeam: othersTeam};
