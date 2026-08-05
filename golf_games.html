@@ -498,11 +498,11 @@
 
   function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
-  async function loadState(){
+  function loadState(){
     try{
-      var res = await window.storage.get(STORAGE_KEY, false);
-      if(res && res.value){
-        var parsed = JSON.parse(res.value);
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(raw){
+        var parsed = JSON.parse(raw);
         state = Object.assign(clone(defaultState), parsed);
         if(!state.handicaps) state.handicaps = blankHandicaps();
         if(!state.holeHcp) state.holeHcp = {};
@@ -522,8 +522,8 @@
   var saveTimer = null;
   function saveState(){
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(async function(){
-      try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }
+    saveTimer = setTimeout(function(){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
       catch(e){ console.error("save failed", e); }
     }, 150);
   }
