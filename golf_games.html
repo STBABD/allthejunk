@@ -671,7 +671,7 @@
     // frozen entries from earlier testing/roster changes), and persist the
     // current value so that whenever this hole DOES get played, whatever
     // was live at that moment is what gets frozen.
-    entry.wolf = auto;
+    if(entry.wolf !== auto){ entry.wolf = auto; saveState(); }
     return auto;
   }
 
@@ -937,6 +937,8 @@
     var n = state.activePlayers;
     var names = activeNames();
     var par = state.holePar[hole] || 4;
+    // entering a score freezes this hole's wolf, so heal it to the live rotation first
+    effectiveWolfIndex(hole);
     if(!state.scores[hole]) state.scores[hole] = {};
     if(!state.putts[hole]) state.putts[hole] = {};
     var holeScores = state.scores[hole];
