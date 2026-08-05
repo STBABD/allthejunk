@@ -484,6 +484,7 @@
     wolf: {},                   // hole -> {wolf:idx, partners:[idx,...], result:'wolfwin'|'oppwin'|'push', manual:bool}
     scores: {},                  // hole -> {playerIdx: grossStrokes}
     putts: {},                   // hole -> {playerIdx: numberOfPutts}
+    snakeTieBreak: {},           // hole -> playerIdx who finished last among a putts-tie (takes the snake)
     snakeEvents: [],             // kept only for legacy data; derived automatically from putts now
     dots: {},                    // hole -> {playerIdx: {greenie:bool,...}}
     points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
@@ -507,6 +508,7 @@
         if(!state.holeHcp) state.holeHcp = {};
         if(!state.scores) state.scores = {};
         if(!state.putts) state.putts = {};
+        if(!state.snakeTieBreak) state.snakeTieBreak = {};
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
       } else {
         state = clone(defaultState);
@@ -585,6 +587,7 @@
   function computeSnakeEvents(){
     var n = state.activePlayers;
     var events = [];
+    var holder = null; // running holder as holes are processed in order
     for(var h=1; h<=18; h++){
       if(!state.putts[h]) continue;
       var hitters = [];
@@ -593,8 +596,30 @@
         if(putts !== null && putts >= puttThreshold(pi)) hitters.push({pi:pi, putts:putts});
       }
       if(hitters.length){
-        hitters.sort(function(a,b){ return b.putts - a.putts; });
-        events.push({hole:h, player:hitters[0].pi, putts:hitters[0].putts});
+        var maxPutts = Math.max.apply(null, hitters.map(function(x){ return x.putts; }));
+        var worst = hitters.filter(function(x){ return x.putts === maxPutts; });
+        var chosen, tied = worst.length > 1, resolved = true;
+        if(tied){
+          var tieBreak = state.snakeTieBreak[h];
+          var tieBreakValid = tieBreak !== undefined && tieBreak !== null && worst.some(function(x){ return x.pi === tieBreak; });
+          if(tieBreakValid){
+            // the player recorded as finishing last among the tied group takes the snake
+            chosen = tieBreak;
+          } else {
+            resolved = false;
+            var holderStillTied = holder !== null && worst.some(function(x){ return x.pi === holder; });
+            if(holderStillTied){
+              chosen = holder;
+            } else {
+              worst.sort(function(a,b){ return a.pi - b.pi; });
+              chosen = worst[0].pi;
+            }
+          }
+        } else {
+          chosen = worst[0].pi;
+        }
+        events.push({hole:h, player:chosen, putts:maxPutts, tied:tied, resolved: !tied || resolved, tiedPlayers: tied ? worst.map(function(x){return x.pi;}) : null});
+        holder = chosen;
       }
     }
     return events;
@@ -918,7 +943,8 @@
           value: g === null ? "" : g,
           oninput: function(e){
             var v = e.target.value;
-            holeScores[pi] = v === "" ? null : parseInt(v,10);
+            var num = parseInt(v,10);
+            holeScores[pi] = (v === "" || isNaN(num)) ? null : num;
             saveState(); render();
           }
         }));
@@ -927,7 +953,8 @@
           value: p === null ? "" : p,
           oninput: function(e){
             var v = e.target.value;
-            holePutts[pi] = v === "" ? null : parseInt(v,10);
+            var num = parseInt(v,10);
+            holePutts[pi] = (v === "" || isNaN(num)) ? null : num;
             saveState(); render();
           }
         }));
@@ -1127,9 +1154,33 @@
     });
     card.appendChild(row);
     card.appendChild(el("div", {class:"note"}, [
-      "Enter putts per player in the Score tab — the snake moves automatically to whoever hits their putt limit (worst putts on the hole wins the snake if more than one player hits it)."
+      "Enter putts per player in the Score tab — the snake moves automatically to whoever hits their putt limit. If two or more players tie on the same hole, the snake goes to whoever finished (holed out) last — tap below to say who that was."
     ]));
     main.appendChild(card);
+
+    var curEvent = events.filter(function(e){ return e.hole === hole; })[0];
+    if(curEvent && curEvent.tied){
+      var tieCard = el("div", {class:"card"}, [
+        el("h2", {}, ["🐍 Tied at " + curEvent.putts + " putts — who finished last?"])
+      ]);
+      var tieRow = el("div", {class:"choice-row"});
+      curEvent.tiedPlayers.forEach(function(pi){
+        tieRow.appendChild(el("button", {
+          class:"chip flag" + (state.snakeTieBreak[hole] === pi ? " selected" : ""),
+          onclick:function(idx){ return function(){
+            state.snakeTieBreak[hole] = idx;
+            saveState(); render();
+          }; }(pi)
+        }, [names[pi]]));
+      });
+      tieCard.appendChild(tieRow);
+      if(!curEvent.resolved){
+        tieCard.appendChild(el("div", {class:"note"}, [
+          "Not resolved yet — for now the snake is defaulting to " + names[curEvent.player] + " (whoever already held it, or earliest in player order). Tap the actual last player above to correct it."
+        ]));
+      }
+      main.appendChild(tieCard);
+    }
 
     if(events.length){
       var log = el("div", {class:"card"});
@@ -1137,7 +1188,7 @@
       var lines = events.map(function(ev,i,arr){
         var isCur = i === arr.length-1;
         return el("div", {class: isCur ? "cur" : ""}, [
-          "Hole " + ev.hole + " — " + names[ev.player] + " (" + ev.putts + " putts)" + (isCur ? " (current)" : "")
+          "Hole " + ev.hole + " — " + names[ev.player] + " (" + ev.putts + " putts" + (ev.tied ? (ev.resolved ? ", tied — resolved" : ", tied — unresolved") : "") + ")" + (isCur ? " (current)" : "")
         ]);
       });
       var logWrap = el("div", {class:"snake-log"}, lines);
@@ -1432,7 +1483,7 @@
   });
   document.getElementById("parSelect").addEventListener("change", function(e){
     state.holePar[state.currentHole] = parseInt(e.target.value,10);
-    saveState();
+    saveState(); render();
   });
   document.getElementById("hcpSelect").addEventListener("change", function(e){
     state.holeHcp[state.currentHole] = parseInt(e.target.value,10);
