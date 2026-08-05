@@ -768,6 +768,10 @@
       if(k === "class") e.className = attrs[k];
       else if(k === "html") e.innerHTML = attrs[k];
       else if(k.indexOf("on") === 0) e.addEventListener(k.slice(2), attrs[k]);
+      // boolean attributes (selected, disabled, checked...) are set by mere
+      // presence — setAttribute(k, false) would still enable them, so use the
+      // DOM property instead
+      else if(typeof attrs[k] === "boolean") e[k] = attrs[k];
       else e.setAttribute(k, attrs[k]);
     }
     (children||[]).forEach(function(c){
@@ -1034,6 +1038,7 @@
     names.forEach(function(nm, i){
       wolfSel.appendChild(el("option", {value:i, selected: effectiveWolf===i}, [nm]));
     });
+    wolfSel.value = effectiveWolf;
     card.appendChild(wolfSel);
     if(entry.wolfManual){
       card.appendChild(el("button", {
