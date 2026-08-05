@@ -1167,29 +1167,31 @@
     ]));
     main.appendChild(card);
 
-    var curEvent = events.filter(function(e){ return e.hole === hole; })[0];
-    if(curEvent && curEvent.tied){
+    // show a tie card for every unresolved tie in the round, plus the current
+    // hole's tie even once resolved so the pick can still be corrected
+    var tieEvents = events.filter(function(ev){ return ev.tied && (!ev.resolved || ev.hole === hole); });
+    tieEvents.forEach(function(tev){
       var tieCard = el("div", {class:"card"}, [
-        el("h2", {}, ["🐍 Tied at " + curEvent.putts + " putts — who finished last?"])
+        el("h2", {}, ["🐍 Hole " + tev.hole + " tied at " + tev.putts + " putts — who finished last?"])
       ]);
       var tieRow = el("div", {class:"choice-row"});
-      curEvent.tiedPlayers.forEach(function(pi){
+      tev.tiedPlayers.forEach(function(pi){
         tieRow.appendChild(el("button", {
-          class:"chip flag" + (state.snakeTieBreak[hole] === pi ? " selected" : ""),
+          class:"chip flag" + (state.snakeTieBreak[tev.hole] === pi ? " selected" : ""),
           onclick:function(idx){ return function(){
-            state.snakeTieBreak[hole] = idx;
+            state.snakeTieBreak[tev.hole] = idx;
             saveState(); render();
           }; }(pi)
         }, [names[pi]]));
       });
       tieCard.appendChild(tieRow);
-      if(!curEvent.resolved){
+      if(!tev.resolved){
         tieCard.appendChild(el("div", {class:"note"}, [
-          "Not resolved yet — for now the snake is defaulting to " + names[curEvent.player] + " (whoever already held it, or earliest in player order). Tap the actual last player above to correct it."
+          "Not resolved yet — for now the snake is defaulting to " + names[tev.player] + " (whoever already held it, or earliest in player order). Tap the actual last player above to correct it."
         ]));
       }
       main.appendChild(tieCard);
-    }
+    });
 
     if(events.length){
       var log = el("div", {class:"card"});
