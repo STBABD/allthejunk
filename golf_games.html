@@ -397,6 +397,13 @@
   .tabbar button.active{ color:var(--gold); }
 
   ::-webkit-scrollbar{ display:none; }
+
+  /* spectator (read-only) mode: navigation stays usable, mutation doesn't */
+  body.viewer main input, body.viewer main select, body.viewer main .chip,
+  body.viewer main .dotbox, body.viewer main button.primary, body.viewer main button.ghost,
+  body.viewer .hole-meta select, body.viewer .hole-nav button{
+    pointer-events:none; opacity:0.65;
+  }
 </style>
 </head>
 <body>
@@ -489,7 +496,9 @@
     dots: {},                    // hole -> {playerIdx: {greenie:bool,...}}
     points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
     wolfUnit: 1,
-    dollarPerPoint: 0
+    dollarPerPoint: 0,
+    shareCode: null,             // set when the scorer shares the round live
+    shareToken: null             // write token; never included in the synced payload
   };
 
   var state = null;
@@ -497,6 +506,89 @@
   var STORAGE_KEY = "clubhouse_ledger_round_v2";
 
   function clone(o){ return JSON.parse(JSON.stringify(o)); }
+
+  // ---------------- LIVE SYNC (spectator mode) ----------------
+  // Optional: paste your Firebase web-app config object here to enable
+  // "Share round" live spectating (see README, "Live spectator mode").
+  // Leave as null and the app runs exactly as before, fully offline.
+  var SYNC_CONFIG = null;
+
+  var VIEWER_CODE = (function(){
+    var m = location.search.match(/[?&]round=([A-Za-z0-9]{4,12})/);
+    return m ? m[1].toUpperCase() : null;
+  })();
+  var IS_VIEWER = !!(SYNC_CONFIG && VIEWER_CODE);
+  var syncDb = null;
+  var syncStatus = "off"; // off | loading | waiting | live | error
+
+  function ensureSync(cb){
+    if(!SYNC_CONFIG) return;
+    if(syncDb){ cb(); return; }
+    function init(){
+      try{
+        if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(SYNC_CONFIG);
+        syncDb = firebase.database();
+        cb();
+      }catch(e){ syncStatus = "error"; console.error("sync init failed", e); }
+    }
+    if(typeof firebase !== "undefined" && firebase.initializeApp){ init(); return; }
+    syncStatus = "loading";
+    var base = "https://www.gstatic.com/firebasejs/10.14.1/";
+    function load(src, ok){
+      var s = document.createElement("script");
+      s.src = base + src;
+      s.onload = ok;
+      s.onerror = function(){ syncStatus = "error"; console.error("sync SDK load failed"); };
+      document.head.appendChild(s);
+    }
+    load("firebase-app-compat.js", function(){ load("firebase-database-compat.js", init); });
+  }
+
+  // the write token never leaves the scorer's phone — strip it before pushing
+  function syncPayload(){
+    var copy = clone(state);
+    delete copy.shareToken;
+    return {token: state.shareToken, updated: Date.now(), state: JSON.stringify(copy)};
+  }
+
+  function pushSync(){
+    if(IS_VIEWER || !syncDb || !state.shareCode || !state.shareToken) return;
+    try{
+      syncDb.ref("rounds/" + state.shareCode).set(syncPayload())
+        .then(function(){ syncStatus = "live"; })
+        .catch(function(e){ syncStatus = "error"; console.error("sync push failed", e); });
+    }catch(e){ console.error("sync push failed", e); }
+  }
+
+  function applySyncedState(parsed){
+    state = Object.assign(clone(defaultState), parsed);
+    if(!state.handicaps) state.handicaps = blankHandicaps();
+    if(!state.holeHcp) state.holeHcp = {};
+    if(!state.scores) state.scores = {};
+    if(!state.putts) state.putts = {};
+    if(!state.snakeTieBreak) state.snakeTieBreak = {};
+  }
+
+  function startViewer(){
+    document.body.className += " viewer";
+    activeTab = "summary";
+    state = clone(defaultState);
+    render();
+    ensureSync(function(){
+      syncStatus = "waiting";
+      syncDb.ref("rounds/" + VIEWER_CODE).on("value", function(snap){
+        var val = snap.val();
+        if(val && val.state){
+          try{
+            applySyncedState(typeof val.state === "string" ? JSON.parse(val.state) : val.state);
+            syncStatus = "live";
+          }catch(e){ syncStatus = "error"; console.error("bad sync payload", e); }
+        }
+        render();
+      }, function(){ syncStatus = "error"; render(); });
+    });
+    render();
+  }
 
   function loadState(){
     try{
@@ -521,10 +613,15 @@
 
   var saveTimer = null;
   function saveState(){
+    if(IS_VIEWER) return; // spectators never persist or push
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
       catch(e){ console.error("save failed", e); }
+      // if the SDK never loaded (e.g. no signal at startup), retry on each
+      // save rather than leaving sharing silently dead for the whole round
+      if(SYNC_CONFIG && state.shareCode && !syncDb) ensureSync(pushSync);
+      else pushSync();
     }, 150);
   }
 
@@ -844,6 +941,15 @@
 
     var main = document.getElementById("main");
     main.innerHTML = "";
+    if(IS_VIEWER){
+      main.appendChild(el("div", {class:"card", style:"padding:10px 14px;"}, [
+        el("div", {class:"eyebrow", style:"margin:0;"}, [
+          "👀 Spectating round " + VIEWER_CODE + " · " +
+          (syncStatus === "live" ? "live" : syncStatus === "waiting" ? "waiting for scorer…" :
+           syncStatus === "error" ? "connection trouble — retrying" : "connecting…")
+        ])
+      ]));
+    }
     if(activeTab === "setup") renderSetup(main);
     else if(!haveNames()) renderNeedSetup(main);
     else if(activeTab === "score") renderScore(main);
@@ -921,6 +1027,50 @@
     }));
     settings.appendChild(grid);
     main.appendChild(settings);
+
+    if(SYNC_CONFIG && !IS_VIEWER){
+      var share = el("div", {class:"card"});
+      share.appendChild(el("h2", {}, ["📡 Share round live"]));
+      if(state.shareCode){
+        var viewUrl = location.origin + location.pathname + "?round=" + state.shareCode;
+        share.appendChild(el("div", {class:"eyebrow"}, ["Round code: " + state.shareCode +
+          (syncStatus === "live" ? " · live" : syncStatus === "error" ? " · connection trouble" : "")]));
+        share.appendChild(el("div", {class:"note", style:"word-break:break-all; user-select:all; -webkit-user-select:all;"}, [viewUrl]));
+        share.appendChild(el("button", {
+          class:"ghost",
+          onclick:function(){
+            if(navigator.share){ navigator.share({title:"Follow our round", url:viewUrl}); }
+            else if(navigator.clipboard){ navigator.clipboard.writeText(viewUrl); alert("Link copied"); }
+          }
+        }, ["Send link to the group"]));
+        share.appendChild(el("button", {
+          class:"ghost",
+          onclick:function(){
+            if(confirm("Stop sharing? Spectators will stop receiving updates.")){
+              state.shareCode = null; state.shareToken = null;
+              saveState(); render();
+            }
+          }
+        }, ["Stop sharing"]));
+      } else {
+        share.appendChild(el("div", {class:"note", style:"margin-bottom:8px;"}, [
+          "Generate a link the rest of the group can open on their phones to follow scores, wolf, snake, dots and the money live. They can watch — only this phone can enter scores."
+        ]));
+        share.appendChild(el("button", {
+          class:"primary",
+          onclick:function(){
+            var alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+            var code = "", token = "";
+            for(var c=0;c<6;c++) code += alphabet.charAt(Math.floor(Math.random()*alphabet.length));
+            for(var t=0;t<24;t++) token += alphabet.charAt(Math.floor(Math.random()*alphabet.length));
+            state.shareCode = code; state.shareToken = token;
+            ensureSync(pushSync);
+            saveState(); render();
+          }
+        }, ["Start sharing this round"]));
+      }
+      main.appendChild(share);
+    }
 
     var reset = el("div", {class:"card"});
     reset.appendChild(el("button", {
@@ -1624,7 +1774,11 @@
     });
   });
 
-  loadState();
+  if(IS_VIEWER) startViewer();
+  else{
+    loadState();
+    if(SYNC_CONFIG && state.shareCode) ensureSync(pushSync); // resume sharing after reload
+  }
 })();
 </script>
 </body>
