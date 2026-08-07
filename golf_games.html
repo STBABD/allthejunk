@@ -967,6 +967,13 @@
 
     var main = document.getElementById("main");
     main.innerHTML = "";
+    if(IS_READONLY && !IS_VIEWER){
+      main.appendChild(el("div", {class:"card", style:"text-align:center; background:var(--flag-soft); border-color:var(--flag);"}, [
+        el("div", {style:"font-size:32px; margin-bottom:6px;"}, ["🤫"]),
+        el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:18px; color:var(--flag);"}, ["Don't tell Jeff the password"]),
+        el("div", {class:"note", style:"margin-top:4px;"}, ["View-only mode — nice try though"])
+      ]));
+    }
     if(IS_VIEWER){
       main.appendChild(el("div", {class:"card", style:"padding:10px 14px;"}, [
         el("div", {class:"eyebrow", style:"margin:0;"}, [
