@@ -515,11 +515,18 @@
   // Leave as null and the app runs exactly as before, fully offline.
   var SYNC_CONFIG = null;
 
+  var EDIT_PASSWORD = "golf";
+  var HAS_EDIT_KEY = (function(){
+    var m = location.search.match(/[?&]edit=([^&]*)/);
+    return m ? m[1] === EDIT_PASSWORD : false;
+  })();
+
   var VIEWER_CODE = (function(){
     var m = location.search.match(/[?&]round=([A-Za-z0-9]{4,12})/);
     return m ? m[1].toUpperCase() : null;
   })();
   var IS_VIEWER = !!(SYNC_CONFIG && VIEWER_CODE);
+  var IS_READONLY = !HAS_EDIT_KEY && !IS_VIEWER;
   var syncDb = null;
   var syncStatus = "off"; // off | loading | waiting | live | error
 
@@ -617,7 +624,7 @@
 
   var saveTimer = null;
   function saveState(){
-    if(IS_VIEWER) return; // spectators never persist or push
+    if(IS_VIEWER || IS_READONLY) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -1803,6 +1810,7 @@
     });
   });
 
+  if(IS_READONLY) document.body.className += " viewer";
   if(IS_VIEWER) startViewer();
   else{
     loadState();
