@@ -854,7 +854,7 @@
     for(var i=0;i<n;i++){
       var c = {}; DOT_KEYS.forEach(function(d){ c[d.key]=0; }); counts.push(c);
     }
-    // Manual/auto-filled dots (everything except threeputt, which now comes from putts data)
+    // Manual dots (greenie, sandy, poley — birdie/eagle are now derived from scores)
     for(var h in state.dots){
       if(parseInt(h,10) > endHole) continue;
       var holeData = state.dots[h];
@@ -862,13 +862,29 @@
         var pi = parseInt(pIdx,10);
         if(pi >= n) continue;
         DOT_KEYS.forEach(function(d){
-          if(d.key === "threeputt") return;
+          if(d.key === "threeputt" || d.key === "birdie" || d.key === "eagle") return;
           if(d.key === "greenie" && (state.holePar[h] || 4) !== 3) return;
           if(holeData[pIdx][d.key]){
             totals[pi] += state.points[d.key];
             counts[pi][d.key]++;
           }
         });
+      }
+    }
+    // Birdie/eagle: derived from gross score vs par
+    for(var hb=1; hb<=endHole; hb++){
+      var bpar = state.holePar[hb] || 4;
+      for(var pi2b=0; pi2b<n; pi2b++){
+        var gb = grossFor(pi2b, hb);
+        if(gb === null) continue;
+        var bdiff = gb - bpar;
+        if(bdiff <= -2){
+          totals[pi2b] += state.points.eagle;
+          counts[pi2b].eagle++;
+        } else if(bdiff === -1){
+          totals[pi2b] += state.points.birdie;
+          counts[pi2b].birdie++;
+        }
       }
     }
     // 3-putt / 4-putt: derived from entered putts, paid by the putter to everyone else
@@ -1408,19 +1424,6 @@
     var par = state.holePar[hole] || 4;
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["• Hole " + hole + " Dots"]));
-    card.appendChild(el("button", {
-      class:"ghost", style:"margin-top:0; margin-bottom:12px;",
-      onclick:function(){
-        for(var i=0;i<n;i++){
-          var g = grossFor(i, hole);
-          if(g === null) continue;
-          var diff = g - par;
-          holeData[i].eagle = diff <= -2;
-          holeData[i].birdie = diff === -1;
-        }
-        saveState(); render();
-      }
-    }, ["Auto-fill birdie/eagle from gross score"]));
     var table = el("table", {class:"dot-table"});
     var thead = el("tr");
     thead.appendChild(el("th", {}, ["Player"]));
@@ -1444,6 +1447,11 @@
             var putts = puttsFor(pi, hole);
             var hit = putts !== null && putts >= thresh;
             td.appendChild(el("div", {class:"dotbox neg" + (hit?" on":"")}, [hit ? "●" : ""]));
+          } else if(d.key === "birdie" || d.key === "eagle"){
+            var g = grossFor(pi, hole);
+            var ddiff = g !== null ? g - par : null;
+            var bon = d.key === "birdie" ? ddiff === -1 : (ddiff !== null && ddiff <= -2);
+            td.appendChild(el("div", {class:"dotbox" + (bon?" on":"")}, [bon ? "●" : ""]));
           } else if(d.key === "greenie" && par !== 3){
             td.appendChild(el("div", {class:"dotbox", style:"opacity:0.25; cursor:default;"}, ["—"]));
           } else {
@@ -1463,7 +1471,7 @@
     }
     card.appendChild(table);
     card.appendChild(el("div", {class:"note"}, [
-      "Birdie/eagle auto-fill uses gross score vs. par. Enter scores in the Score tab first. Greenie only applies on par 3s (grayed out otherwise). The 3-Putt column is automatic from putts entered in the Score tab — players over an 18 handicap need 4 putts before it counts (see the badge under their name)."
+      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s (grayed out otherwise). The 3-Putt column is automatic from putts entered in the Score tab — players over an 18 handicap need 4 putts before it counts (see the badge under their name)."
     ]));
     main.appendChild(card);
 
@@ -1511,6 +1519,12 @@
       if((state.holePar[hole]||4) === 3 && holeData.greenie) out.push("G");
       if(holeData.sandy) out.push("S");
       if(holeData.poley) out.push("P");
+    }
+    var g = grossFor(pi, hole);
+    if(g !== null){
+      var diff = g - (state.holePar[hole] || 4);
+      if(diff <= -2) out.push("E");
+      else if(diff === -1) out.push("B");
     }
     return out;
   }
@@ -1612,7 +1626,7 @@
     scroll.appendChild(table);
     card.appendChild(scroll);
     card.appendChild(el("div", {class:"note"}, [
-      "G = greenie, S = sandy, P = poley, \"3P\"/\"4P\" = hit their putt limit that hole (paid out to the table). Birdies show green, eagles gold, double-bogey-or-worse red. Wolf row: initial + ✓/✗/= for that hole's result, ×N when carry-over stakes applied. Swipe to see all 18 holes."
+      "G = greenie, S = sandy, P = poley, B = birdie, E = eagle, \"3P\"/\"4P\" = hit their putt limit that hole (paid out to the table). Birdies show green, eagles gold, double-bogey-or-worse red. Wolf row: initial + ✓/✗/= for that hole's result, ×N when carry-over stakes applied. Swipe to see all 18 holes."
     ]));
     main.appendChild(card);
   }
