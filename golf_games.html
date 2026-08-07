@@ -480,10 +480,12 @@
 
   function blankPlayers(){ var a=[]; for(var i=0;i<MAX_PLAYERS;i++) a.push(""); return a; }
   function blankHandicaps(){ var a=[]; for(var i=0;i<MAX_PLAYERS;i++) a.push(0); return a; }
+  function blankSnakeThresholds(){ var a=[]; for(var i=0;i<MAX_PLAYERS;i++) a.push(3); return a; }
 
   var defaultState = {
     players: blankPlayers(),
     handicaps: blankHandicaps(),
+    snakeThresholds: blankSnakeThresholds(),
     activePlayers: 5,
     currentHole: 1,
     holePar: {},               // hole -> 3/4/5
@@ -563,6 +565,7 @@
   function applySyncedState(parsed){
     state = Object.assign(clone(defaultState), parsed);
     if(!state.handicaps) state.handicaps = blankHandicaps();
+    if(!state.snakeThresholds) state.snakeThresholds = blankSnakeThresholds();
     if(!state.holeHcp) state.holeHcp = {};
     if(!state.scores) state.scores = {};
     if(!state.putts) state.putts = {};
@@ -597,6 +600,7 @@
         var parsed = JSON.parse(raw);
         state = Object.assign(clone(defaultState), parsed);
         if(!state.handicaps) state.handicaps = blankHandicaps();
+        if(!state.snakeThresholds) state.snakeThresholds = blankSnakeThresholds();
         if(!state.holeHcp) state.holeHcp = {};
         if(!state.scores) state.scores = {};
         if(!state.putts) state.putts = {};
@@ -644,9 +648,8 @@
     return state.holeHcp[hole] || hole; // default to hole number until the user sets real stroke index
   }
 
-  // High-handicap players (>18) need 4 putts, not 3, before it counts against them
   function puttThreshold(playerIdx){
-    return (state.handicaps[playerIdx] || 0) > 18 ? 4 : 3;
+    return state.snakeThresholds[playerIdx] || 3;
   }
 
   // strokes a player receives on a given hole, from their handicap + the hole's stroke index
@@ -887,7 +890,7 @@
         }
       }
     }
-    // 3-putt / 4-putt: derived from entered putts, paid by the putter to everyone else
+    // putt threshold: derived from entered putts, paid by the putter to everyone else
     for(var hh=1; hh<=endHole; hh++){
       if(!state.putts[hh]) continue;
       for(var pi2=0; pi2<n; pi2++){
@@ -998,7 +1001,13 @@
     });
     card.appendChild(sizeRow);
 
-    card.appendChild(el("label", {class:"field-label"}, ["Names & course handicap"]));
+    card.appendChild(el("label", {class:"field-label"}, ["Names, handicap & snake putts"]));
+    var labelRow = el("div", {class:"player-row", style:"margin-bottom:4px;"});
+    labelRow.appendChild(el("div", {style:"width:9px;"}));
+    labelRow.appendChild(el("div", {class:"eyebrow", style:"flex:1; margin:0;"}, ["Name"]));
+    labelRow.appendChild(el("div", {class:"eyebrow", style:"width:62px; text-align:center; margin:0;"}, ["HCP"]));
+    labelRow.appendChild(el("div", {class:"eyebrow", style:"width:50px; text-align:center; margin:0;"}, ["Snake"]));
+    card.appendChild(labelRow);
     for(var i=0;i<state.activePlayers;i++){
       (function(idx){
         var row = el("div", {class:"player-row"});
@@ -1013,11 +1022,17 @@
           value: state.handicaps[idx] || 0,
           oninput: function(e){ state.handicaps[idx] = parseFloat(e.target.value)||0; saveState(); }
         }));
+        row.appendChild(el("input", {
+          class:"hcp-input", type:"number", min:"1", max:"10",
+          value: state.snakeThresholds[idx] || 3,
+          style:"width:50px;",
+          oninput: function(e){ state.snakeThresholds[idx] = parseInt(e.target.value,10)||3; saveState(); }
+        }));
         card.appendChild(row);
       })(i);
     }
     card.appendChild(el("div", {class:"note"}, [
-      "Handicap = each player's course handicap. On any hole, a player gets a stroke when that hole's Stroke Index (set at the top of the screen) is at or below their handicap — set Stroke Index per hole to match your scorecard. Players with a handicap over 18 need 4 putts (not 3) before it counts against them in Snake and the 3-Putt dot."
+      "Handicap = each player's course handicap. On any hole, a player gets a stroke when that hole's Stroke Index (set at the top of the screen) is at or below their handicap — set Stroke Index per hole to match your scorecard. Snake = number of putts before it counts against a player in Snake and the 3-Putt dot (default 3)."
     ]));
     main.appendChild(card);
 
@@ -1093,10 +1108,10 @@
       class:"ghost",
       onclick:function(){
         if(confirm("Start a new round? This clears all scores, wolf, snake, and dots for the current round.")){
-          var players = state.players, handicaps = state.handicaps, ap = state.activePlayers,
+          var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
               pts = state.points, wu = state.wolfUnit, dpp = state.dollarPerPoint;
           state = clone(defaultState);
-          state.players = players; state.handicaps = handicaps; state.activePlayers = ap;
+          state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
           state.points = pts; state.wolfUnit = wu; state.dollarPerPoint = dpp;
           saveState(); render();
         }
@@ -1173,7 +1188,7 @@
       })(i);
     }
     card.appendChild(el("div", {class:"note"}, [
-      "Net score = gross − strokes received. Wolf auto-suggests a winner from net scores. Putts feed Snake and the 3-Putt dot automatically — anyone over an 18 handicap needs 4 putts, not 3, before it counts."
+      "Net score = gross − strokes received. Wolf auto-suggests a winner from net scores. Putts feed Snake and the 3-Putt dot automatically — each player's putt threshold is set in Setup."
     ]));
     main.appendChild(card);
   }
@@ -1471,7 +1486,7 @@
     }
     card.appendChild(table);
     card.appendChild(el("div", {class:"note"}, [
-      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s (grayed out otherwise). The 3-Putt column is automatic from putts entered in the Score tab — players over an 18 handicap need 4 putts before it counts (see the badge under their name)."
+      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s (grayed out otherwise). The 3-Putt column is automatic from putts entered in the Score tab — each player's putt threshold is set in Setup (see the badge under their name if not the default 3)."
     ]));
     main.appendChild(card);
 
@@ -1586,7 +1601,7 @@
     wolfRow.appendChild(el("td", {}, [""]));
     table.appendChild(wolfRow);
 
-    // One row per player: gross score (colored) + dot abbreviations + 3/4-putt marker
+    // One row per player: gross score (colored) + dot abbreviations + putt-threshold marker
     for(var pi=0; pi<n; pi++){
       (function(pi){
         var row = el("tr");
