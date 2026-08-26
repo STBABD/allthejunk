@@ -136,13 +136,13 @@
   }
   nav.tabs button{
     flex:1;
-    padding:11px 2px;
+    padding:11px 1px;
     background:none;
     border:none;
     color:rgba(243,238,223,0.55);
     font-family:'Space Mono',monospace;
-    font-size:9.5px;
-    letter-spacing:0.3px;
+    font-size:8.5px;
+    letter-spacing:0.15px;
     text-transform:uppercase;
     border-bottom:3px solid transparent;
     cursor:pointer;
@@ -390,10 +390,10 @@
     padding:6px 1px;
     cursor:pointer;
     font-family:'Inter',sans-serif;
-    font-size:9.5px;
+    font-size:8.5px;
     font-weight:600;
   }
-  .tabbar button .ic{ font-size:17px; }
+  .tabbar button .ic{ font-size:15px; }
   .tabbar button.active{ color:var(--gold); }
 
   ::-webkit-scrollbar{ display:none; }
@@ -448,6 +448,7 @@
     <button data-tab="snake">Snake</button>
     <button data-tab="dots">Dots</button>
     <button data-tab="summary">Ledger</button>
+    <button data-tab="history">History</button>
   </nav>
 
   <main id="main"></main>
@@ -459,6 +460,7 @@
     <button data-tab="snake"><span class="ic">🐍</span>Snake</button>
     <button data-tab="dots"><span class="ic">•</span>Dots</button>
     <button data-tab="summary"><span class="ic">Σ</span>Ledger</button>
+    <button data-tab="history"><span class="ic">📜</span>History</button>
   </div>
 
 </div>
@@ -498,10 +500,8 @@
     dots: {},                    // hole -> {playerIdx: {greenie:bool,...}}
     points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
     wolfUnit: 1,
-<<<<<<< Updated upstream
-=======
     snakeStake: 1,               // dots the end-of-round snake holder owes, folded into Payouts only
->>>>>>> Stashed changes
+ main
     dollarPerPoint: 0,
     shareCode: null,             // set when the scorer shares the round live
     shareToken: null             // write token; never included in the synced payload
@@ -517,20 +517,22 @@
   // Optional: paste your Firebase web-app config object here to enable
   // "Share round" live spectating (see README, "Live spectator mode").
   // Leave as null and the app runs exactly as before, fully offline.
-  var SYNC_CONFIG = null;
-
-  var EDIT_PASSWORD = "golf";
-  var HAS_EDIT_KEY = (function(){
-    var m = location.search.match(/[?&]edit=([^&]*)/);
-    return m ? m[1] === EDIT_PASSWORD : false;
-  })();
+  var SYNC_CONFIG = {
+    apiKey: "AIzaSyDJkAcHUYN2-pGNTDrXMH5-hrbwL17SikA",
+    authDomain: "all-the-junk.firebaseapp.com",
+    databaseURL: "https://all-the-junk-default-rtdb.firebaseio.com",
+    projectId: "all-the-junk",
+    storageBucket: "all-the-junk.firebasestorage.app",
+    messagingSenderId: "793323492175",
+    appId: "1:793323492175:web:15e5fc20459a0597072b3a"
+  };
 
   var VIEWER_CODE = (function(){
     var m = location.search.match(/[?&]round=([A-Za-z0-9]{4,12})/);
     return m ? m[1].toUpperCase() : null;
   })();
   var IS_VIEWER = !!(SYNC_CONFIG && VIEWER_CODE);
-  var IS_READONLY = !HAS_EDIT_KEY && !IS_VIEWER;
+  var IS_READONLY = IS_VIEWER; // only a spectator link (?round=CODE) is readonly — your own link is always editable
   var syncDb = null;
   var syncStatus = "off"; // off | loading | waiting | live | error
 
@@ -581,10 +583,8 @@
     if(!state.scores) state.scores = {};
     if(!state.putts) state.putts = {};
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
-<<<<<<< Updated upstream
-=======
     if(state.snakeStake === undefined) state.snakeStake = 1;
->>>>>>> Stashed changes
+ main
   }
 
   function startViewer(){
@@ -633,7 +633,7 @@
 
   var saveTimer = null;
   function saveState(){
-    if(IS_VIEWER || IS_READONLY) return;
+    if(IS_VIEWER || IS_READONLY || viewingArchiveId) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -1005,13 +1005,6 @@
 
     var main = document.getElementById("main");
     main.innerHTML = "";
-    if(IS_READONLY && !IS_VIEWER){
-      main.appendChild(el("div", {class:"card", style:"text-align:center; background:var(--flag-soft); border-color:var(--flag);"}, [
-        el("div", {style:"font-size:32px; margin-bottom:6px;"}, ["🤫"]),
-        el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:18px; color:var(--flag);"}, ["Don't tell Jeff the password"]),
-        el("div", {class:"note", style:"margin-top:4px;"}, ["View-only mode — nice try though"])
-      ]));
-    }
     if(IS_VIEWER){
       main.appendChild(el("div", {class:"card", style:"padding:10px 14px;"}, [
         el("div", {class:"eyebrow", style:"margin:0;"}, [
@@ -1021,7 +1014,17 @@
         ])
       ]));
     }
+    if(viewingArchiveId){
+      main.appendChild(el("div", {class:"card", style:"text-align:center; background:var(--gold-soft); border-color:var(--gold);"}, [
+        el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:#6b551f;"}, ["📜 Viewing an archived round — read-only"]),
+        el("button", {
+          class:"ghost", style:"margin-top:10px;",
+          onclick: backToLiveRound
+        }, ["← Back to current round"])
+      ]));
+    }
     if(activeTab === "setup") renderSetup(main);
+    else if(activeTab === "history") renderHistory(main);
     else if(!haveNames()) renderNeedSetup(main);
     else if(activeTab === "score") renderScore(main);
     else if(activeTab === "wolf") renderWolf(main);
@@ -1037,6 +1040,46 @@
         el("div", {}, ["Add your group in Setup before keeping score."])
       ])
     ]));
+  }
+
+  function renderHistory(main){
+    var card = el("div", {class:"card"});
+    card.appendChild(el("h2", {}, ["📜 Round History"]));
+
+    if(!SYNC_CONFIG){
+      card.appendChild(el("div", {class:"empty"}, [
+        el("div", {class:"big"}, ["📡"]),
+        el("div", {}, ["History needs a Firebase connection, which isn't configured in this copy of the app."])
+      ]));
+      main.appendChild(card);
+      return;
+    }
+
+    if(archivedRounds === null){
+      card.appendChild(el("div", {class:"note"}, ["Loading past rounds…"]));
+      main.appendChild(card);
+      loadArchivedRounds();
+      return;
+    }
+
+    if(archivedRounds.length === 0){
+      card.appendChild(el("div", {class:"empty"}, [
+        el("div", {class:"big"}, ["📭"]),
+        el("div", {}, ["No saved rounds yet — use \"Save round to history\" in Setup, or it happens automatically when you start a new round."])
+      ]));
+      main.appendChild(card);
+      return;
+    }
+
+    card.appendChild(el("div", {class:"note"}, ["Tap any round to view its final Ledger, Payouts, and Scorecard (read-only). Synced across all devices."]));
+    main.appendChild(card);
+
+    archivedRounds.forEach(function(entry){
+      var row = el("div", {class:"card", style:"cursor:pointer;", onclick:function(){ viewArchivedRound(entry); }});
+      row.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.date || "Unknown date"]));
+      row.appendChild(el("div", {class:"breakdown"}, [(entry.players || []).join(", ")]));
+      main.appendChild(row);
+    });
   }
 
   function renderSetup(main){
@@ -1161,16 +1204,31 @@
     }
 
     var reset = el("div", {class:"card"});
+    if(SYNC_CONFIG){
+      reset.appendChild(el("button", {
+        class:"ghost",
+        onclick:function(){ archiveRound(); }
+      }, ["📜 Save round to history now"]));
+      if(archiveStatus === "saving") reset.appendChild(el("div", {class:"note"}, ["Saving…"]));
+      else if(archiveStatus === "saved") reset.appendChild(el("div", {class:"note"}, ["Saved ✓ — find it under the History tab."]));
+      else if(archiveStatus === "error") reset.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, ["Couldn't save — check your connection and try again."]));
+    }
     reset.appendChild(el("button", {
       class:"ghost",
       onclick:function(){
         if(confirm("Start a new round? This clears all scores, wolf, snake, and dots for the current round.")){
-          var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
-              pts = state.points, wu = state.wolfUnit, dpp = state.dollarPerPoint;
-          state = clone(defaultState);
-          state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
-          state.points = pts; state.wolfUnit = wu; state.dollarPerPoint = dpp;
-          saveState(); render();
+          var hasData = false;
+          for(var hh=1; hh<=18; hh++){ if(holeHasData(hh)){ hasData = true; break; } }
+          function doReset(){
+            var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
+                pts = state.points, wu = state.wolfUnit, ss = state.snakeStake, dpp = state.dollarPerPoint;
+            state = clone(defaultState);
+            state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
+            state.points = pts; state.wolfUnit = wu; state.snakeStake = ss; state.dollarPerPoint = dpp;
+            saveState(); render();
+          }
+          if(hasData) archiveRound(doReset);
+          else doReset();
         }
       }
     }, ["Start new round (keep players, handicaps & settings)"]));
@@ -1699,88 +1757,8 @@
     card.appendChild(scroll);
     card.appendChild(el("div", {class:"note"}, [
       "G = greenie, S = sandy, P = poley, B = birdie, E = eagle, \"3P\"/\"4P\" = hit their putt limit that hole (paid out to the table). Birdies show green, eagles gold, double-bogey-or-worse red. Wolf row: initial + ✓/✗/= for that hole's result, ×N when carry-over stakes applied. Swipe to see all 18 holes."
-<<<<<<< Updated upstream
-    ]));
-    main.appendChild(card);
-  }
-
-  function holeHasData(h){
-    for(var i=0;i<state.activePlayers;i++){
-      if(grossFor(i,h) !== null || puttsFor(i,h) !== null) return true;
-    }
-    var w = state.wolf[h];
-    if(w && (w.manual ? w.result : autoWolfResult(h))) return true;
-    var d = state.dots[h];
-    if(d){
-      for(var pIdx in d){ for(var k in d[pIdx]){ if(d[pIdx][k]) return true; } }
-    }
-    return false;
-  }
-
-  function fmtDollars(v){
-    var s = Math.abs(v) % 1 === 0 ? String(Math.abs(v)) : Math.abs(v).toFixed(2);
-    return (v < 0 ? "-$" : "$") + s;
-  }
-
-  function renderMoneyCard(main, names){
-    var n = state.activePlayers;
-    var lastHole = 0;
-    for(var h=1;h<=18;h++){ if(holeHasData(h)) lastHole = h; }
-
-    var card = el("div", {class:"card"});
-    card.appendChild(el("h2", {}, ["💰 Money through the round"]));
-    if(lastHole === 0){
-      card.appendChild(el("div", {class:"note"}, ["No holes played yet — the running tally builds here as scores come in."]));
-      main.appendChild(card);
-      return;
-    }
-
-    // cumulative dollars per player after each hole 1..lastHole
-    var cum = [];
-    for(var h2=1; h2<=lastHole; h2++){
-      var wp = computeWolfPoints(h2);
-      var dt = computeDotTotals(h2).totals;
-      var row = [];
-      for(var i=0;i<n;i++){ row.push((wp[i] + dt[i]) * state.dollarPerPoint); }
-      cum.push(row);
-    }
-
-    var final = cum[cum.length-1];
-    var best = Math.max.apply(null, final);
-    var leaders = [];
-    for(var li=0; li<n; li++){ if(final[li] === best) leaders.push(names[li]); }
-    card.appendChild(el("div", {class:"eyebrow"}, [
-      "Through hole " + lastHole + " — " + leaders.join(" & ") + (leaders.length>1 ? " lead" : " leads") + " at " + fmtDollars(best)
-    ]));
-
-    var scroll = el("div", {class:"card-scroll"});
-    var table = el("table", {class:"scorecard"});
-    var headRow = el("tr");
-    headRow.appendChild(el("th", {class:"label"}, [""]));
-    for(var h3=1; h3<=lastHole; h3++){ headRow.appendChild(el("th", {}, [String(h3)])); }
-    table.appendChild(headRow);
-    for(var p=0;p<n;p++){
-      (function(pi){
-        var tr = el("tr");
-        tr.appendChild(el("th", {class:"label"}, [
-          el("span", {class:"swatch", style:"background:"+SWATCHES[pi]+"; margin-right:6px; display:inline-block;"}),
-          names[pi]
-        ]));
-        for(var h=1; h<=lastHole; h++){
-          var v = cum[h-1][pi];
-          tr.appendChild(el("td", {}, [
-            el("div", {class:"sc-score" + (v>0?" birdie":v<0?" bogey":"")}, [fmtDollars(v)])
-          ]));
-        }
-        table.appendChild(tr);
-      })(p);
-    }
-    scroll.appendChild(table);
-    card.appendChild(scroll);
-    card.appendChild(el("div", {class:"note"}, [
       "Cumulative winnings after each hole (Wolf + Dots × $" + state.dollarPerPoint + "/pt). Swipe sideways for the full round."
-=======
->>>>>>> Stashed changes
+ main
     ]));
     main.appendChild(card);
   }
@@ -1952,21 +1930,7 @@
     renderPayouts(main, names, wolfGross, dotRes.totals, holder);
 
     if(state.dollarPerPoint > 0){
-<<<<<<< Updated upstream
-      var dCard = el("div", {class:"card"});
-      dCard.appendChild(el("h2", {}, ["Settling up"]));
-      names.forEach(function(nm, i){
-        var grand = wolfTotals[i] + dotRes.totals[i];
-        var dollars = grand * state.dollarPerPoint;
-        var row = el("div", {class:"totals-row"});
-        row.appendChild(el("div", {class:"name"}, [nm]));
-        row.appendChild(el("div", {class:"grand " + (dollars>0?"pos":dollars<0?"neg":"zero")},
-          [(dollars>=0?"+$":"-$") + Math.abs(dollars).toFixed(2)]));
-        dCard.appendChild(row);
-      });
-      main.appendChild(dCard);
-=======
->>>>>>> Stashed changes
+ main
       renderMoneyCard(main, names);
     }
 
