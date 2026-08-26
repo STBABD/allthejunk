@@ -501,6 +501,7 @@
     points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
     wolfUnit: 1,
     snakeStake: 1,               // dots the end-of-round snake holder owes, folded into Payouts only
+ main
     dollarPerPoint: 0,
     shareCode: null,             // set when the scorer shares the round live
     shareToken: null             // write token; never included in the synced payload
@@ -583,70 +584,7 @@
     if(!state.putts) state.putts = {};
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
     if(state.snakeStake === undefined) state.snakeStake = 1;
-  }
-
-  // ---------------- ROUND HISTORY (cross-device archive) ----------------
-  // Separate from live-sync's "rounds/" path (which is for in-progress
-  // spectating and gets overwritten constantly). "archive/" holds a
-  // permanent snapshot per completed round, readable from any device.
-  var archiveStatus = "idle"; // idle | saving | saved | error
-  var archivedRounds = null;  // cached list once loaded
-  var viewingArchiveId = null;
-  var savedLiveState = null;
-
-  function archiveRound(cb){
-    if(!SYNC_CONFIG){ if(cb) cb(); return; }
-    // capture the payload NOW, synchronously — ensureSync's callback may be
-    // async (first-time SDK load), and the caller often resets state right
-    // after calling this, so we can't risk building the payload late
-    var payload = {
-      date: new Date().toLocaleDateString(),
-      updated: Date.now(),
-      players: state.players.slice(0, state.activePlayers),
-      state: JSON.stringify(state)
-    };
-    ensureSync(function(){
-      try{
-        archiveStatus = "saving"; render();
-        syncDb.ref("archive").push(payload)
-          .then(function(){ archiveStatus = "saved"; archivedRounds = null; render(); })
-          .catch(function(e){ archiveStatus = "error"; console.error("archive save failed", e); render(); });
-      }catch(e){ archiveStatus = "error"; console.error("archive save failed", e); render(); }
-    });
-    if(cb) cb();
-  }
-
-  function loadArchivedRounds(){
-    if(!SYNC_CONFIG){ archivedRounds = []; render(); return; }
-    ensureSync(function(){
-      syncDb.ref("archive").limitToLast(30).once("value")
-        .then(function(snap){
-          var val = snap.val() || {};
-          var list = Object.keys(val).map(function(k){
-            var v = val[k]; v.id = k; return v;
-          });
-          list.sort(function(a,b){ return (b.updated||0) - (a.updated||0); });
-          archivedRounds = list;
-          render();
-        })
-        .catch(function(e){ console.error("archive load failed", e); archivedRounds = []; render(); });
-    });
-  }
-
-  function viewArchivedRound(entry){
-    savedLiveState = state;
-    try{ state = JSON.parse(entry.state); }
-    catch(e){ console.error("bad archived round", e); return; }
-    viewingArchiveId = entry.id;
-    activeTab = "summary";
-    render();
-  }
-
-  function backToLiveRound(){
-    if(savedLiveState) state = savedLiveState;
-    savedLiveState = null;
-    viewingArchiveId = null;
-    render();
+ main
   }
 
   function startViewer(){
@@ -1819,6 +1757,8 @@
     card.appendChild(scroll);
     card.appendChild(el("div", {class:"note"}, [
       "G = greenie, S = sandy, P = poley, B = birdie, E = eagle, \"3P\"/\"4P\" = hit their putt limit that hole (paid out to the table). Birdies show green, eagles gold, double-bogey-or-worse red. Wolf row: initial + ✓/✗/= for that hole's result, ×N when carry-over stakes applied. Swipe to see all 18 holes."
+      "Cumulative winnings after each hole (Wolf + Dots × $" + state.dollarPerPoint + "/pt). Swipe sideways for the full round."
+ main
     ]));
     main.appendChild(card);
   }
@@ -1990,6 +1930,7 @@
     renderPayouts(main, names, wolfGross, dotRes.totals, holder);
 
     if(state.dollarPerPoint > 0){
+ main
       renderMoneyCard(main, names);
     }
 
