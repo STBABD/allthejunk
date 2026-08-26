@@ -498,6 +498,10 @@
     dots: {},                    // hole -> {playerIdx: {greenie:bool,...}}
     points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
     wolfUnit: 1,
+<<<<<<< Updated upstream
+=======
+    snakeStake: 1,               // dots the end-of-round snake holder owes, folded into Payouts only
+>>>>>>> Stashed changes
     dollarPerPoint: 0,
     shareCode: null,             // set when the scorer shares the round live
     shareToken: null             // write token; never included in the synced payload
@@ -577,6 +581,10 @@
     if(!state.scores) state.scores = {};
     if(!state.putts) state.putts = {};
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
+<<<<<<< Updated upstream
+=======
+    if(state.snakeStake === undefined) state.snakeStake = 1;
+>>>>>>> Stashed changes
   }
 
   function startViewer(){
@@ -612,6 +620,7 @@
         if(!state.scores) state.scores = {};
         if(!state.putts) state.putts = {};
         if(!state.snakeTieBreak) state.snakeTieBreak = {};
+        if(state.snakeStake === undefined) state.snakeStake = 1;
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
       } else {
         state = clone(defaultState);
@@ -855,6 +864,35 @@
     return totals;
   }
 
+  // Gross wins only: the winning side each hole banks the full points at
+  // stake; the losing side adds nothing (not a negative). Used for the
+  // Ledger and Payouts, where only "dots won" matters, not net position.
+  function computeWolfGrossWins(endHole){
+    if(endHole === undefined) endHole = 18;
+    var n = state.activePlayers;
+    var totals = new Array(n).fill(0);
+    var carry = 1;
+    for(var hole=1; hole<=endHole; hole++){
+      var entry = state.wolf[hole];
+      if(!entry) continue;
+      var result = entry.manual ? entry.result : autoWolfResult(hole);
+      if(!result) continue;
+      if(result === "push"){
+        carry += 1;
+        continue;
+      }
+      var unit = state.wolfUnit * carry;
+      var teams = wolfTeamsFor(hole);
+      var wolfWon = result === "wolfwin";
+      var winningTeam = wolfWon ? teams.wolfTeam : teams.othersTeam;
+      var losingSize = wolfWon ? teams.othersTeam.length : teams.wolfTeam.length;
+      var winDelta = unit * losingSize;
+      winningTeam.forEach(function(p){ totals[p] += winDelta; });
+      carry = 1;
+    }
+    return totals;
+  }
+
   // ---------------- DOTS LOGIC ----------------
   function computeDotTotals(endHole){
     if(endHole === undefined) endHole = 18;
@@ -1064,6 +1102,11 @@
     grid.appendChild(el("input", {
       type:"number", value: state.wolfUnit,
       oninput:function(e){ state.wolfUnit = parseFloat(e.target.value)||1; saveState(); render(); }
+    }));
+    grid.appendChild(el("label", {}, ["Snake (dots holder pays everyone, in Payouts)"]));
+    grid.appendChild(el("input", {
+      type:"number", value: state.snakeStake,
+      oninput:function(e){ state.snakeStake = parseFloat(e.target.value)||0; saveState(); render(); }
     }));
     grid.appendChild(el("label", {}, ["$ per point (optional)"]));
     grid.appendChild(el("input", {
@@ -1339,21 +1382,21 @@
 
     main.appendChild(card);
 
-    // running wolf totals
-    var totals = computeWolfPoints();
+    // running wolf totals (gross wins — see Ledger for the full picture)
+    var totals = computeWolfGrossWins();
     var sumCard = el("div", {class:"card"});
-    sumCard.appendChild(el("h2", {}, ["Wolf points so far"]));
+    sumCard.appendChild(el("h2", {}, ["Wolf gross wins so far"]));
     names.forEach(function(nm, i){
       var t = totals[i];
       var row = el("div", {class:"totals-row"});
       row.appendChild(el("div", {class:"name"}, [
         el("span", {class:"swatch", style:"background:"+SWATCHES[i]}), nm
       ]));
-      row.appendChild(el("div", {class:"grand " + (t>0?"pos":t<0?"neg":"zero")}, [(t>0?"+":"")+t]));
+      row.appendChild(el("div", {class:"grand " + (t>0?"pos":"zero")}, ["+" + t]));
       sumCard.appendChild(row);
     });
     sumCard.appendChild(el("div", {class:"note"}, [
-      "A push carries its stakes into the next hole instead of settling — two pushes in a row means the third decisive hole pays out 3x."
+      "This shows points won only, not what you paid on holes you lost — see the Ledger tab for the full payout picture. A push carries its stakes into the next hole instead of settling — two pushes in a row means the third decisive hole pays out 3x."
     ]));
     main.appendChild(sumCard);
   }
@@ -1656,6 +1699,7 @@
     card.appendChild(scroll);
     card.appendChild(el("div", {class:"note"}, [
       "G = greenie, S = sandy, P = poley, B = birdie, E = eagle, \"3P\"/\"4P\" = hit their putt limit that hole (paid out to the table). Birdies show green, eagles gold, double-bogey-or-worse red. Wolf row: initial + ✓/✗/= for that hole's result, ×N when carry-over stakes applied. Swipe to see all 18 holes."
+<<<<<<< Updated upstream
     ]));
     main.appendChild(card);
   }
@@ -1735,34 +1779,180 @@
     card.appendChild(scroll);
     card.appendChild(el("div", {class:"note"}, [
       "Cumulative winnings after each hole (Wolf + Dots × $" + state.dollarPerPoint + "/pt). Swipe sideways for the full round."
+=======
+>>>>>>> Stashed changes
     ]));
     main.appendChild(card);
   }
 
+  function holeHasData(h){
+    for(var i=0;i<state.activePlayers;i++){
+      if(grossFor(i,h) !== null || puttsFor(i,h) !== null) return true;
+    }
+    var w = state.wolf[h];
+    if(w && (w.manual ? w.result : autoWolfResult(h))) return true;
+    var d = state.dots[h];
+    if(d){
+      for(var pIdx in d){ for(var k in d[pIdx]){ if(d[pIdx][k]) return true; } }
+    }
+    return false;
+  }
+
+  function fmtDollars(v){
+    var s = Math.abs(v) % 1 === 0 ? String(Math.abs(v)) : Math.abs(v).toFixed(2);
+    return (v < 0 ? "-$" : "$") + s;
+  }
+
+  function renderMoneyCard(main, names){
+    var n = state.activePlayers;
+    var lastHole = 0;
+    for(var h=1;h<=18;h++){ if(holeHasData(h)) lastHole = h; }
+
+    var card = el("div", {class:"card"});
+    card.appendChild(el("h2", {}, ["📈 Total dots through the round"]));
+    if(lastHole === 0){
+      card.appendChild(el("div", {class:"note"}, ["No holes played yet — the running tally builds here as scores come in."]));
+      main.appendChild(card);
+      return;
+    }
+
+    // cumulative gross dots (Wolf wins + Dots) per player after each hole 1..lastHole
+    var cum = [];
+    for(var h2=1; h2<=lastHole; h2++){
+      var wg = computeWolfGrossWins(h2);
+      var dt = computeDotTotals(h2).totals;
+      var row = [];
+      for(var i=0;i<n;i++){ row.push(wg[i] + dt[i]); }
+      cum.push(row);
+    }
+
+    var final = cum[cum.length-1];
+    var best = Math.max.apply(null, final);
+    var leaders = [];
+    for(var li=0; li<n; li++){ if(final[li] === best) leaders.push(names[li]); }
+    card.appendChild(el("div", {class:"eyebrow"}, [
+      "Through hole " + lastHole + " — " + leaders.join(" & ") + (leaders.length>1 ? " lead" : " leads") + " at " + best + " dots"
+    ]));
+
+    var scroll = el("div", {class:"card-scroll"});
+    var table = el("table", {class:"scorecard"});
+    var headRow = el("tr");
+    headRow.appendChild(el("th", {class:"label"}, [""]));
+    for(var h3=1; h3<=lastHole; h3++){ headRow.appendChild(el("th", {}, [String(h3)])); }
+    table.appendChild(headRow);
+    for(var p=0;p<n;p++){
+      (function(pi){
+        var tr = el("tr");
+        tr.appendChild(el("th", {class:"label"}, [
+          el("span", {class:"swatch", style:"background:"+SWATCHES[pi]+"; margin-right:6px; display:inline-block;"}),
+          names[pi]
+        ]));
+        for(var h=1; h<=lastHole; h++){
+          var v = cum[h-1][pi];
+          tr.appendChild(el("td", {}, [
+            el("div", {class:"sc-score" + (v>0?" birdie":"")}, [String(v)])
+          ]));
+        }
+        table.appendChild(tr);
+      })(p);
+    }
+    scroll.appendChild(table);
+    card.appendChild(scroll);
+    card.appendChild(el("div", {class:"note"}, [
+      "Cumulative gross dots (Wolf wins + Dots) after each hole. Swipe sideways for the full round. See Payouts above for what the gap between players actually means in $."
+    ]));
+    main.appendChild(card);
+  }
+
+  // Total dots = gross Wolf wins + Dots. The Snake stake is added to every
+  // OTHER player's total (the holder pays each of them, same pattern as the
+  // 3-Putt dot) rather than subtracted from the holder — so the holder's
+  // own total can never go negative just from holding the snake. Payout
+  // rule: whoever has fewer total dots owes the exact difference to
+  // whoever has more — pairwise, for every pair, not just neighbors in rank.
+  function renderPayouts(main, names, wolfGross, dotsGross, snakeHolder){
+    var n = state.activePlayers;
+    var combined = [];
+    for(var i=0;i<n;i++){
+      var v = wolfGross[i] + dotsGross[i];
+      if(snakeHolder !== null && i !== snakeHolder) v += state.snakeStake;
+      combined.push(v);
+    }
+
+    var order = [];
+    for(var i2=0;i2<n;i2++) order.push(i2);
+    order.sort(function(a,b){ return combined[b] - combined[a]; });
+
+    var useDollars = state.dollarPerPoint > 0;
+    function fmt(amount){ return useDollars ? fmtDollars(amount * state.dollarPerPoint) : (amount + " dot" + (amount===1?"":"s")); }
+
+    var card = el("div", {class:"card"});
+    card.appendChild(el("h2", {}, ["💵 Payouts"]));
+    card.appendChild(el("div", {class:"note"}, [
+      "Ranked by total dots (Wolf gross wins + Dots" + (snakeHolder!==null ? ", plus " + state.snakeStake + " for everyone except whoever's holding the snake" : "") + "). Whoever has fewer dots owes the exact difference to whoever has more — pairwise, not just to the leader."
+    ]));
+    order.forEach(function(pi, rank){
+      var row = el("div", {class:"totals-row"});
+      row.appendChild(el("div", {class:"name"}, [
+        el("span", {class:"eyebrow", style:"margin:0 8px 0 0; width:16px; display:inline-block;"}, ["#"+(rank+1)]),
+        el("span", {class:"swatch", style:"background:"+SWATCHES[pi]}), names[pi],
+        pi===snakeHolder ? el("span", {class:"eyebrow", style:"margin:0 0 0 6px; color:var(--flag);"}, ["🐍 pays everyone +" + state.snakeStake]) : null
+      ]));
+      row.appendChild(el("div", {class:"grand pos"}, [combined[pi] + " dots"]));
+      card.appendChild(row);
+    });
+    main.appendChild(card);
+
+    names.forEach(function(nm, pi){
+      var owed = [];
+      for(var j=0;j<n;j++){
+        if(j===pi) continue;
+        if(combined[j] > combined[pi]) owed.push({name:names[j], amount: combined[j]-combined[pi]});
+      }
+      if(owed.length === 0) return;
+      owed.sort(function(a,b){ return a.amount-b.amount; });
+      var pCard = el("div", {class:"card"});
+      pCard.appendChild(el("h2", {style:"font-size:14px;"}, [nm + " owes"]));
+      owed.forEach(function(o){
+        var row = el("div", {class:"totals-row"});
+        row.appendChild(el("div", {class:"name"}, [o.name]));
+        row.appendChild(el("div", {class:"grand neg"}, [fmt(o.amount)]));
+        pCard.appendChild(row);
+      });
+      main.appendChild(pCard);
+    });
+  }
+
   function renderSummary(main){
     var names = activeNames();
-    var wolfTotals = computeWolfPoints();
+    var wolfGross = computeWolfGrossWins();
     var dotRes = computeDotTotals();
     var holder = currentSnakeHolder();
 
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Σ Round Ledger"]));
     names.forEach(function(nm, i){
-      var grand = wolfTotals[i] + dotRes.totals[i];
+      var grand = wolfGross[i] + dotRes.totals[i];
       var row = el("div", {class:"totals-row"});
-      var breakdown = "Wolf " + (wolfTotals[i]>=0?"+":"") + wolfTotals[i] +
-        "  ·  Dots " + (dotRes.totals[i]>=0?"+":"") + dotRes.totals[i] +
+      var breakdown = "Wolf +" + wolfGross[i] +
+        "  ·  Dots +" + dotRes.totals[i] +
         (holder === i ? "  ·  🐍 holding snake" : "");
       row.appendChild(el("div", {}, [
         el("div", {class:"name"}, [el("span", {class:"swatch", style:"background:"+SWATCHES[i]}), nm]),
         el("div", {class:"breakdown"}, [breakdown])
       ]));
-      row.appendChild(el("div", {class:"grand " + (grand>0?"pos":grand<0?"neg":"zero")}, [(grand>0?"+":"")+grand]));
+      row.appendChild(el("div", {class:"grand " + (grand>0?"pos":"zero")}, ["+" + grand]));
       card.appendChild(row);
     });
+    card.appendChild(el("div", {class:"note"}, [
+      "Wolf shows gross points won (holes you won outright or as part of the winning team) — not net of what you paid on holes you lost. See Payouts below for what that actually means in owed dots or dollars."
+    ]));
     main.appendChild(card);
 
+    renderPayouts(main, names, wolfGross, dotRes.totals, holder);
+
     if(state.dollarPerPoint > 0){
+<<<<<<< Updated upstream
       var dCard = el("div", {class:"card"});
       dCard.appendChild(el("h2", {}, ["Settling up"]));
       names.forEach(function(nm, i){
@@ -1775,6 +1965,8 @@
         dCard.appendChild(row);
       });
       main.appendChild(dCard);
+=======
+>>>>>>> Stashed changes
       renderMoneyCard(main, names);
     }
 
@@ -1784,7 +1976,7 @@
         el("div", {class:"icon"}, ["🐍"]),
         el("div", {class:"txt"}, [
           el("div", {class:"who"}, [names[holder]]),
-          el("div", {class:"lbl"}, ["CURRENTLY HOLDING THE SNAKE"])
+          el("div", {class:"lbl"}, ["CURRENTLY HOLDING THE SNAKE — pays everyone +" + state.snakeStake + " in Payouts above"])
         ])
       ]));
       main.appendChild(sCard);
