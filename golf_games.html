@@ -128,6 +128,76 @@
     border-radius:7px; font-family:'Space Mono',monospace; font-size:12px; padding:4px 8px;
   }
 
+  /* full 18-hole tap-to-jump strip */
+  .hole-strip{
+    position:relative; z-index:1;
+    margin-top:12px;
+    display:flex; gap:6px;
+    overflow-x:auto;
+    padding-bottom:2px;
+  }
+  .hole-strip button{
+    flex:0 0 auto;
+    width:34px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.18);
+    border-radius:8px;
+    color:rgba(243,238,223,0.75);
+    padding:5px 0 4px;
+    display:flex; flex-direction:column; align-items:center; gap:1px;
+    cursor:pointer;
+  }
+  .hole-strip button .n{ font-family:'Space Mono',monospace; font-weight:700; font-size:11.5px; }
+  .hole-strip button .p{ font-family:'Space Mono',monospace; font-size:8.5px; opacity:0.7; }
+  .hole-strip button.done{ border-color:rgba(190,154,68,0.5); }
+  .hole-strip button.done .n::after{ content:"·"; color:var(--gold); margin-left:2px; }
+  .hole-strip button.cur{
+    background:var(--gold); border-color:var(--gold); color:var(--fairway);
+  }
+
+  /* dashboard hero (top of Setup) */
+  .hero{
+    background:var(--fairway);
+    color:var(--paper);
+    border-radius:var(--radius);
+    padding:20px;
+    margin-bottom:14px;
+  }
+  .hero h2{
+    font-family:'Fraunces',serif; font-weight:600; font-size:19px;
+    margin:6px 0 14px; line-height:1.3; max-width:26ch;
+  }
+  .hero .stat-row{ display:flex; gap:10px; margin-bottom:14px; }
+  .hero .stat{
+    flex:1; background:rgba(255,255,255,0.07); border-radius:10px; padding:10px 12px;
+  }
+  .hero .stat .n{ font-family:'Space Mono',monospace; font-weight:700; font-size:20px; }
+  .hero .stat .l{ font-family:'Space Mono',monospace; font-size:9px; letter-spacing:0.4px; opacity:0.75; text-transform:uppercase; margin-top:2px; }
+  .active-round-card{
+    background:var(--turf);
+    border-radius:12px; padding:14px 16px;
+  }
+  .active-round-card .name{ font-family:'Fraunces',serif; font-weight:700; font-size:17px; }
+  .active-round-card .meta{ font-family:'Space Mono',monospace; font-size:10.5px; opacity:0.85; margin-top:2px; }
+  .avatar-row{ display:flex; gap:6px; margin:10px 0; }
+  .avatar{
+    width:26px; height:26px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Space Mono',monospace; font-weight:700; font-size:11px;
+    color:#fff; flex-shrink:0;
+  }
+  .progress-track{
+    height:6px; border-radius:999px; background:rgba(255,255,255,0.2);
+    margin:10px 0; overflow:hidden;
+  }
+  .progress-fill{ height:100%; background:var(--gold); border-radius:999px; }
+  .status-badge{
+    display:inline-block; font-family:'Space Mono',monospace; font-size:9.5px; font-weight:700;
+    letter-spacing:0.4px; padding:3px 8px; border-radius:999px; text-transform:uppercase;
+  }
+  .status-badge.live{ background:var(--gold); color:var(--fairway); }
+  .status-badge.idle{ background:rgba(255,255,255,0.15); color:var(--paper); }
+
   /* ---------- Tabs ---------- */
   nav.tabs{
     display:flex;
@@ -404,6 +474,16 @@
   body.viewer .hole-meta select, body.viewer .hole-nav button{
     pointer-events:none; opacity:0.65;
   }
+
+  /* full-screen auth gate: hide the normal chrome entirely */
+  body.unauth header, body.unauth nav.tabs, body.unauth .tabbar{ display:none; }
+  body.unauth main{ padding-top:60px; padding-bottom:40px; }
+  .auth-card{ max-width:340px; margin:0 auto; }
+  .auth-card input{
+    width:100%; padding:12px 14px; border-radius:10px;
+    border:1.5px solid var(--line); font-size:15px; margin-bottom:10px;
+    font-family:'Inter',sans-serif;
+  }
 </style>
 </head>
 <body>
@@ -439,6 +519,7 @@
         <select id="hcpSelect"></select>
       </div>
     </div>
+    <div class="hole-strip" id="holeStrip"></div>
   </header>
 
   <nav class="tabs" id="tabs">
@@ -490,6 +571,7 @@
     snakeThresholds: blankSnakeThresholds(),
     activePlayers: 5,
     currentHole: 1,
+    roundName: "",
     holePar: {},               // hole -> 3/4/5
     holeHcp: {},                // hole -> stroke index 1-18
     wolf: {},                   // hole -> {wolf:idx, partners:[idx,...], result:'wolfwin'|'oppwin'|'push', manual:bool}
@@ -501,7 +583,6 @@
     points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
     wolfUnit: 1,
     snakeStake: 1,               // dots the end-of-round snake holder owes, folded into Payouts only
- main
     dollarPerPoint: 0,
     shareCode: null,             // set when the scorer shares the round live
     shareToken: null             // write token; never included in the synced payload
@@ -535,28 +616,165 @@
   var IS_READONLY = IS_VIEWER; // only a spectator link (?round=CODE) is readonly — your own link is always editable
   var syncDb = null;
   var syncStatus = "off"; // off | loading | waiting | live | error
+  var currentUser = null;  // firebase.auth() user object once signed in
+  var authReady = false;   // true once we know signed-in or not (avoids a flash of the login screen)
+  var authError = null;
+  var authMode = "signin"; // signin | signup | reset
+  var authBusy = false;
 
-  function ensureSync(cb){
-    if(!SYNC_CONFIG) return;
-    if(syncDb){ cb(); return; }
+  var authDb = null; // firebase.database() handle, set once loaded
+
+  function ensureFirebaseCore(cb){
+    if(!SYNC_CONFIG){ cb(); return; }
     function init(){
       try{
         if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(SYNC_CONFIG);
-        syncDb = firebase.database();
+        authDb = firebase.database();
         cb();
-      }catch(e){ syncStatus = "error"; console.error("sync init failed", e); }
+      }catch(e){ authError = "Couldn't connect — check your internet connection."; console.error("firebase init failed", e); render(); }
     }
-    if(typeof firebase !== "undefined" && firebase.initializeApp){ init(); return; }
-    syncStatus = "loading";
+    if(typeof firebase !== "undefined" && firebase.initializeApp && firebase.auth){ init(); return; }
     var base = "https://www.gstatic.com/firebasejs/10.14.1/";
     function load(src, ok){
       var s = document.createElement("script");
       s.src = base + src;
       s.onload = ok;
-      s.onerror = function(){ syncStatus = "error"; console.error("sync SDK load failed"); };
+      s.onerror = function(){ authError = "Couldn't load — check your internet connection."; console.error("SDK load failed: " + src); render(); };
       document.head.appendChild(s);
     }
-    load("firebase-app-compat.js", function(){ load("firebase-database-compat.js", init); });
+    load("firebase-app-compat.js", function(){
+      load("firebase-database-compat.js", function(){
+        load("firebase-auth-compat.js", init);
+      });
+    });
+  }
+
+  function ensureSync(cb){
+    if(!SYNC_CONFIG) return;
+    if(syncDb){ cb(); return; }
+    ensureFirebaseCore(function(){ syncDb = authDb; cb(); });
+  }
+
+  // ---------------- AUTH ----------------
+  function initAuth(){
+    if(!SYNC_CONFIG){ authReady = true; render(); return; } // no backend configured — nothing to gate
+    ensureFirebaseCore(function(){
+      firebase.auth().onAuthStateChanged(function(user){
+        currentUser = user;
+        authReady = true;
+        if(user){
+          loadState();
+          if(state.shareCode) ensureSync(pushSync); // resume sharing after reload
+        }
+        render();
+      });
+    });
+  }
+
+  function authSignIn(email, password){
+    authBusy = true; authError = null; render();
+    firebase.auth().signInWithEmailAndPassword(email, password)
+      .catch(function(e){ authError = friendlyAuthError(e); })
+      .then(function(){ authBusy = false; render(); });
+  }
+
+  function authSignUp(email, password){
+    authBusy = true; authError = null; render();
+    firebase.auth().createUserWithEmailAndPassword(email, password)
+      .catch(function(e){ authError = friendlyAuthError(e); })
+      .then(function(){ authBusy = false; render(); });
+  }
+
+  function authSignOut(){
+    firebase.auth().signOut();
+    state = null;
+    activeTab = "setup";
+  }
+
+  function authResetPassword(email){
+    authBusy = true; authError = null; render();
+    firebase.auth().sendPasswordResetEmail(email)
+      .then(function(){ authError = "Reset email sent — check your inbox."; })
+      .catch(function(e){ authError = friendlyAuthError(e); })
+      .then(function(){ authBusy = false; render(); });
+  }
+
+  function friendlyAuthError(e){
+    var code = e && e.code || "";
+    if(code.indexOf("wrong-password") >= 0 || code.indexOf("invalid-credential") >= 0) return "Wrong email or password.";
+    if(code.indexOf("user-not-found") >= 0) return "No account with that email — try Create Account instead.";
+    if(code.indexOf("email-already-in-use") >= 0) return "That email already has an account — try Sign In instead.";
+    if(code.indexOf("weak-password") >= 0) return "Password needs to be at least 6 characters.";
+    if(code.indexOf("invalid-email") >= 0) return "That doesn't look like a valid email address.";
+    return (e && e.message) || "Something went wrong — try again.";
+  }
+
+  // One-time bridge for rounds saved before login existed: any archive
+  // entry with no ownerUid yet is claimable by whoever taps this first.
+  function claimOrphanedRounds(cb){
+    if(!SYNC_CONFIG || !currentUser) { if(cb) cb(0); return; }
+    ensureSync(function(){
+      syncDb.ref("archive").once("value").then(function(snap){
+        var val = snap.val() || {};
+        var updates = {};
+        var count = 0;
+        Object.keys(val).forEach(function(id){
+          if(!val[id].ownerUid){ updates[id + "/ownerUid"] = currentUser.uid; count++; }
+        });
+        if(count === 0){ if(cb) cb(0); return; }
+        syncDb.ref("archive").update(updates).then(function(){
+          archivedRounds = null;
+          if(cb) cb(count);
+        });
+      }).catch(function(e){ console.error("claim failed", e); if(cb) cb(0); });
+    });
+  }
+
+  function renderAuthCard(){
+    var card = el("div", {class:"card auth-card"});
+    card.appendChild(el("div", {style:"text-align:center; margin-bottom:16px;"}, [
+      el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:22px;"}, ["⛳ Clubhouse Ledger"]),
+      el("div", {class:"eyebrow", style:"margin-top:4px;"}, [
+        authMode === "signup" ? "Create an account" : authMode === "reset" ? "Reset your password" : "Sign in to continue"
+      ])
+    ]));
+
+    var emailInput = el("input", {type:"email", placeholder:"Email", autocomplete:"email"});
+    card.appendChild(emailInput);
+
+    var passInput = null;
+    if(authMode !== "reset"){
+      passInput = el("input", {type:"password", placeholder:"Password", autocomplete: authMode==="signup" ? "new-password" : "current-password"});
+      card.appendChild(passInput);
+    }
+
+    if(authError){
+      card.appendChild(el("div", {class:"note", style:"color:var(--flag); margin-bottom:10px;"}, [authError]));
+    }
+
+    function submit(){
+      var email = emailInput.value.trim();
+      var pass = passInput ? passInput.value : "";
+      if(!email || (authMode !== "reset" && !pass)){ authError = "Fill in " + (authMode==="reset" ? "your email" : "both fields") + "."; render(); return; }
+      if(authMode === "signup") authSignUp(email, pass);
+      else if(authMode === "reset") authResetPassword(email);
+      else authSignIn(email, pass);
+    }
+
+    card.appendChild(el("button", {
+      class:"primary", disabled: authBusy,
+      onclick: submit
+    }, [authBusy ? "Please wait…" : authMode === "signup" ? "Create Account" : authMode === "reset" ? "Send Reset Email" : "Sign In"]));
+
+    var switchRow = el("div", {style:"text-align:center; margin-top:14px;"});
+    if(authMode === "signin"){
+      switchRow.appendChild(el("button", {class:"ghost", style:"margin-top:6px;", onclick:function(){ authMode="signup"; authError=null; render(); }}, ["Create an account"]));
+      switchRow.appendChild(el("button", {class:"ghost", style:"margin-top:6px;", onclick:function(){ authMode="reset"; authError=null; render(); }}, ["Forgot password?"]));
+    } else {
+      switchRow.appendChild(el("button", {class:"ghost", style:"margin-top:6px;", onclick:function(){ authMode="signin"; authError=null; render(); }}, ["Back to sign in"]));
+    }
+    card.appendChild(switchRow);
+    return card;
   }
 
   // the write token never leaves the scorer's phone — strip it before pushing
@@ -584,7 +802,78 @@
     if(!state.putts) state.putts = {};
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
     if(state.snakeStake === undefined) state.snakeStake = 1;
- main
+  }
+
+  // ---------------- ROUND HISTORY (cross-device archive) ----------------
+  // Separate from live-sync's "rounds/" path (which is for in-progress
+  // spectating and gets overwritten constantly). "archive/" holds a
+  // permanent snapshot per completed round, readable from any device.
+  var archiveStatus = "idle"; // idle | saving | saved | error
+  var archivedRounds = null;  // cached list once loaded
+  var claimMessage = null;
+  var courseSearchQuery = "";
+  var courseSearchResults = null; // null = not searched yet, [] = no results, [...] = results
+  var courseSearchStatus = "idle"; // idle | loading | error
+  var courseLoadStatus = "idle";   // idle | loading | error | loaded
+  var courseLoadDebug = null;      // raw JSON shown if we couldn't parse hole data, for troubleshooting
+  var viewingArchiveId = null;
+  var savedLiveState = null;
+
+  function archiveRound(cb){
+    if(!SYNC_CONFIG || !currentUser){ if(cb) cb(); return; }
+    // capture the payload NOW, synchronously — ensureSync's callback may be
+    // async (first-time SDK load), and the caller often resets state right
+    // after calling this, so we can't risk building the payload late
+    var payload = {
+      date: new Date().toLocaleDateString(),
+      updated: Date.now(),
+      roundName: state.roundName.trim(),
+      players: state.players.slice(0, state.activePlayers),
+      ownerUid: currentUser.uid,
+      state: JSON.stringify(state)
+    };
+    ensureSync(function(){
+      try{
+        archiveStatus = "saving"; render();
+        syncDb.ref("archive").push(payload)
+          .then(function(){ archiveStatus = "saved"; archivedRounds = null; render(); })
+          .catch(function(e){ archiveStatus = "error"; console.error("archive save failed", e); render(); });
+      }catch(e){ archiveStatus = "error"; console.error("archive save failed", e); render(); }
+    });
+    if(cb) cb();
+  }
+
+  function loadArchivedRounds(){
+    if(!SYNC_CONFIG){ archivedRounds = []; render(); return; }
+    ensureSync(function(){
+      syncDb.ref("archive").limitToLast(30).once("value")
+        .then(function(snap){
+          var val = snap.val() || {};
+          var list = Object.keys(val).map(function(k){
+            var v = val[k]; v.id = k; return v;
+          });
+          list.sort(function(a,b){ return (b.updated||0) - (a.updated||0); });
+          archivedRounds = list;
+          render();
+        })
+        .catch(function(e){ console.error("archive load failed", e); archivedRounds = []; render(); });
+    });
+  }
+
+  function viewArchivedRound(entry){
+    savedLiveState = state;
+    try{ state = JSON.parse(entry.state); }
+    catch(e){ console.error("bad archived round", e); return; }
+    viewingArchiveId = entry.id;
+    activeTab = "summary";
+    render();
+  }
+
+  function backToLiveRound(){
+    if(savedLiveState) state = savedLiveState;
+    savedLiveState = null;
+    viewingArchiveId = null;
+    render();
   }
 
   function startViewer(){
@@ -837,36 +1126,12 @@
     return carry;
   }
 
-  function computeWolfPoints(endHole){
-    if(endHole === undefined) endHole = 18;
-    var n = state.activePlayers;
-    var totals = new Array(n).fill(0);
-    var carry = 1;
-    for(var hole=1; hole<=endHole; hole++){
-      var entry = state.wolf[hole];
-      if(!entry) continue;
-      var result = entry.manual ? entry.result : autoWolfResult(hole);
-      if(!result) continue;
-      if(result === "push"){
-        carry += 1;
-        continue;
-      }
-      var unit = state.wolfUnit * carry;
-      var teams = wolfTeamsFor(hole);
-      var wolfTeam = teams.wolfTeam, othersTeam = teams.othersTeam;
-      var wolfWon = result === "wolfwin";
-      var wolfDelta = (wolfWon ? 1 : -1) * unit * othersTeam.length;
-      var otherDelta = (wolfWon ? -1 : 1) * unit * wolfTeam.length;
-      wolfTeam.forEach(function(p){ totals[p] += wolfDelta; });
-      othersTeam.forEach(function(p){ totals[p] += otherDelta; });
-      carry = 1;
-    }
-    return totals;
-  }
-
-  // Gross wins only: the winning side each hole banks the full points at
-  // stake; the losing side adds nothing (not a negative). Used for the
-  // Ledger and Payouts, where only "dots won" matters, not net position.
+  // Wolf scoring: each winning player earns a flat number of points based
+  // only on how many pushes carried into the hole -- 1 for a normal win, 2
+  // after one carryover, 3 after two, etc. Team size does NOT scale the
+  // payout: a lone wolf winning banks the same per-player amount as a
+  // 3-person winning team. Losers gain nothing (gross-wins model), which
+  // is what the Ledger and Payouts are built on.
   function computeWolfGrossWins(endHole){
     if(endHole === undefined) endHole = 18;
     var n = state.activePlayers;
@@ -885,9 +1150,7 @@
       var teams = wolfTeamsFor(hole);
       var wolfWon = result === "wolfwin";
       var winningTeam = wolfWon ? teams.wolfTeam : teams.othersTeam;
-      var losingSize = wolfWon ? teams.othersTeam.length : teams.wolfTeam.length;
-      var winDelta = unit * losingSize;
-      winningTeam.forEach(function(p){ totals[p] += winDelta; });
+      winningTeam.forEach(function(p){ totals[p] += unit; });
       carry = 1;
     }
     return totals;
@@ -971,6 +1234,25 @@
     return e;
   }
 
+  function renderHoleStrip(){
+    var strip = document.getElementById("holeStrip");
+    strip.innerHTML = "";
+    for(var h=1; h<=18; h++){
+      var btn = el("button", {
+        class: (h === state.currentHole ? "cur" : "") + (holeHasData(h) ? " done" : ""),
+        onclick: function(hh){ return function(){ state.currentHole = hh; saveState(); render(); }; }(h)
+      }, [
+        el("div", {class:"n"}, [String(h)]),
+        el("div", {class:"p"}, [String(state.holePar[h] || 4)])
+      ]);
+      strip.appendChild(btn);
+    }
+  }
+
+  function avatarChip(pi, names){
+    return el("div", {class:"avatar", style:"background:"+SWATCHES[pi]}, [names[pi].charAt(0).toUpperCase()]);
+  }
+
   function populateHcpSelect(){
     var sel = document.getElementById("hcpSelect");
     sel.innerHTML = "";
@@ -993,11 +1275,37 @@
   }
 
   function render(){
+    var needsAuthGate = !IS_VIEWER && SYNC_CONFIG;
+    document.body.className = document.body.className.replace(/\bunauth\b/g, "").trim();
+
+    if(needsAuthGate && !authReady){
+      document.body.className += " unauth";
+      var m0 = document.getElementById("main");
+      m0.innerHTML = "";
+      m0.appendChild(el("div", {class:"card auth-card", style:"text-align:center;"}, ["Loading…"]));
+      return;
+    }
+    if(needsAuthGate && !currentUser){
+      document.body.className += " unauth";
+      var m1 = document.getElementById("main");
+      m1.innerHTML = "";
+      m1.appendChild(renderAuthCard());
+      return;
+    }
+    if(needsAuthGate && !state){
+      document.body.className += " unauth";
+      var m2 = document.getElementById("main");
+      m2.innerHTML = "";
+      m2.appendChild(el("div", {class:"card auth-card", style:"text-align:center;"}, ["Loading your round…"]));
+      return;
+    }
+
     document.getElementById("holeNum").textContent = state.currentHole;
     document.getElementById("parSelect").value = state.holePar[state.currentHole] || 4;
     document.getElementById("hcpSelect").value = holeHcpIndex(state.currentHole);
     document.getElementById("roundLabel").textContent =
       "HOLE " + state.currentHole + " OF 18 · " + state.activePlayers + "P";
+    renderHoleStrip();
 
     document.querySelectorAll("#tabs button, #tabbar button").forEach(function(b){
       b.classList.toggle("active", b.dataset.tab === activeTab);
@@ -1055,6 +1363,17 @@
       return;
     }
 
+    card.appendChild(el("button", {
+      class:"ghost",
+      onclick:function(){
+        claimOrphanedRounds(function(count){
+          claimMessage = count > 0 ? ("Claimed " + count + " round" + (count===1?"":"s") + ".") : "Nothing to claim — everything's already yours.";
+          render();
+        });
+      }
+    }, ["Claim my past rounds"]));
+    if(claimMessage){ card.appendChild(el("div", {class:"note"}, [claimMessage])); }
+
     if(archivedRounds === null){
       card.appendChild(el("div", {class:"note"}, ["Loading past rounds…"]));
       main.appendChild(card);
@@ -1076,15 +1395,204 @@
 
     archivedRounds.forEach(function(entry){
       var row = el("div", {class:"card", style:"cursor:pointer;", onclick:function(){ viewArchivedRound(entry); }});
-      row.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.date || "Unknown date"]));
+      row.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.roundName || entry.date || "Unknown date"]));
+      if(entry.roundName) row.appendChild(el("div", {class:"eyebrow", style:"margin:2px 0 0;"}, [entry.date]));
       row.appendChild(el("div", {class:"breakdown"}, [(entry.players || []).join(", ")]));
       main.appendChild(row);
     });
   }
 
+  var OPENGOLF_BASE = "https://api.opengolfapi.org/v1";
+
+  function searchCourses(query){
+    if(!query.trim()){ return; }
+    courseSearchStatus = "loading"; courseSearchResults = null; render();
+    fetch(OPENGOLF_BASE + "/courses/search?q=" + encodeURIComponent(query) + "&limit=10")
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(data){
+        courseSearchResults = data.courses || [];
+        courseSearchStatus = "idle";
+        render();
+      })
+      .catch(function(e){
+        console.error("course search failed", e);
+        courseSearchStatus = "error";
+        render();
+      });
+  }
+
+  // The API's exact field names for hole-by-hole data aren't independently
+  // confirmed yet — this tries several plausible shapes and falls back to
+  // showing the raw response so it can be fixed quickly if the real shape
+  // differs.
+  function parseCourseHoles(data){
+    var raw = data.holes || data.scorecard || (data.course && (data.course.holes || data.course.scorecard));
+    if(!raw) return null;
+    var list = Array.isArray(raw) ? raw : Object.keys(raw).map(function(k){ return Object.assign({hole: parseInt(k,10)}, raw[k]); });
+    var out = {};
+    var ok = true;
+    list.forEach(function(h){
+      var num = h.hole || h.number || h.hole_number;
+      var par = h.par;
+      var idx = h.handicap != null ? h.handicap : (h.handicap_index != null ? h.handicap_index : (h.stroke_index != null ? h.stroke_index : h.hcp));
+      if(num == null || par == null || idx == null){ ok = false; return; }
+      out[num] = {par: par, hcp: idx};
+    });
+    if(!ok || Object.keys(out).length < 9) return null; // didn't find enough usable holes — bail to raw fallback
+    return out;
+  }
+
+  function loadCourse(courseId){
+    courseLoadStatus = "loading"; courseLoadDebug = null; render();
+    fetch(OPENGOLF_BASE + "/courses/" + courseId)
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(data){
+        var holes = parseCourseHoles(data);
+        if(!holes){
+          courseLoadStatus = "error";
+          courseLoadDebug = JSON.stringify(data, null, 2).slice(0, 2000);
+          render();
+          return;
+        }
+        Object.keys(holes).forEach(function(num){
+          state.holePar[num] = holes[num].par;
+          state.holeHcp[num] = holes[num].hcp;
+        });
+        saveState();
+        courseLoadStatus = "loaded";
+        courseSearchResults = null;
+        courseSearchQuery = "";
+        render();
+      })
+      .catch(function(e){
+        console.error("course load failed", e);
+        courseLoadStatus = "error";
+        render();
+      });
+  }
+
+  function renderDashboardHero(){
+    var hero = el("div", {class:"hero"});
+    hero.appendChild(el("div", {class:"eyebrow", style:"color:var(--gold-soft); margin:0; opacity:0.8;"}, ["CLUBHOUSE LEDGER"]));
+    hero.appendChild(el("h2", {}, ["Play the round. We'll settle who owes who."]));
+
+    var holesRecorded = 0;
+    for(var h=1; h<=18; h++){ if(holeHasData(h)) holesRecorded++; }
+
+    if(SYNC_CONFIG && currentUser){
+      if(archivedRounds === null) loadArchivedRounds();
+      var statRow = el("div", {class:"stat-row"});
+      statRow.appendChild(el("div", {class:"stat"}, [
+        el("div", {class:"n"}, [archivedRounds === null ? "…" : String(archivedRounds.length)]),
+        el("div", {class:"l"}, ["Rounds saved"])
+      ]));
+      statRow.appendChild(el("div", {class:"stat"}, [
+        el("div", {class:"n"}, [String(holesRecorded)]),
+        el("div", {class:"l"}, ["Holes recorded"])
+      ]));
+      hero.appendChild(statRow);
+    }
+
+    if(haveNames()){
+      var names = activeNames();
+      var live = holesRecorded > 0;
+      var card = el("div", {class:"active-round-card"});
+      var topRow = el("div", {style:"display:flex; justify-content:space-between; align-items:flex-start;"});
+      topRow.appendChild(el("div", {}, [
+        el("div", {class:"name"}, [state.roundName.trim() || "This round"]),
+        el("div", {class:"meta"}, ["Hole " + state.currentHole + " of 18 · " + state.activePlayers + " players"])
+      ]));
+      topRow.appendChild(el("span", {class:"status-badge " + (live ? "live" : "idle")}, [live ? "In play" : "Not started"]));
+      card.appendChild(topRow);
+
+      var avRow = el("div", {class:"avatar-row"});
+      names.forEach(function(nm, i){ avRow.appendChild(avatarChip(i, names)); });
+      card.appendChild(avRow);
+
+      card.appendChild(el("div", {class:"progress-track"}, [
+        el("div", {class:"progress-fill", style:"width:" + Math.round(holesRecorded/18*100) + "%;"})
+      ]));
+
+      card.appendChild(el("button", {
+        class:"primary", style:"background:var(--gold); color:var(--fairway); margin-top:4px;",
+        onclick:function(){ activeTab = "score"; render(); }
+      }, [live ? "Continue scoring →" : "Start scoring →"]));
+      hero.appendChild(card);
+    }
+
+    return hero;
+  }
+
   function renderSetup(main){
+    main.appendChild(renderDashboardHero());
+
+    if(SYNC_CONFIG && currentUser){
+      var acct = el("div", {class:"card", style:"display:flex; align-items:center; justify-content:space-between;"});
+      acct.appendChild(el("div", {}, [
+        el("div", {class:"eyebrow"}, ["Signed in as"]),
+        el("div", {style:"font-weight:600; font-size:13.5px;"}, [currentUser.email])
+      ]));
+      acct.appendChild(el("button", {class:"ghost", style:"margin:0; width:auto; padding:9px 16px;", onclick:authSignOut}, ["Sign Out"]));
+      main.appendChild(acct);
+    }
+
+    var courseCard = el("div", {class:"card"});
+    courseCard.appendChild(el("h2", {}, ["⛳ Load a course"]));
+    courseCard.appendChild(el("div", {class:"note"}, ["Search OpenGolfAPI's free course database to auto-fill Par and Stroke Index for all 18 holes — no manual entry."]));
+    var searchRow = el("div", {style:"display:flex; gap:8px; margin-top:10px;"});
+    var searchInput = el("input", {
+      class:"name-input", style:"margin-bottom:0;", type:"text", placeholder:"Course name",
+      value: courseSearchQuery,
+      oninput:function(e){ courseSearchQuery = e.target.value; }
+    });
+    searchRow.appendChild(searchInput);
+    searchRow.appendChild(el("button", {
+      class:"primary", style:"width:auto; margin:0; padding:10px 18px;",
+      onclick:function(){ searchCourses(searchInput.value); }
+    }, ["Search"]));
+    courseCard.appendChild(searchRow);
+
+    if(courseSearchStatus === "loading"){
+      courseCard.appendChild(el("div", {class:"note"}, ["Searching…"]));
+    } else if(courseSearchStatus === "error"){
+      courseCard.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, ["Search failed — check your connection and try again."]));
+    }
+
+    if(courseLoadStatus === "loading"){
+      courseCard.appendChild(el("div", {class:"note"}, ["Loading scorecard…"]));
+    } else if(courseLoadStatus === "loaded"){
+      courseCard.appendChild(el("div", {class:"note", style:"color:var(--turf);"}, ["Loaded ✓ — Par and Stroke Index filled in for all 18 holes. Check the header on Score/Wolf/etc to confirm."]));
+    } else if(courseLoadStatus === "error"){
+      courseCard.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, ["Couldn't read hole data from that course's response. This means OpenGolfAPI's field names differ from what's expected — paste the debug output below back to Claude to fix the parsing."]));
+      if(courseLoadDebug){
+        courseCard.appendChild(el("div", {style:"font-family:monospace; font-size:9px; white-space:pre-wrap; background:var(--paper-2); padding:8px; border-radius:8px; max-height:150px; overflow-y:auto;"}, [courseLoadDebug]));
+      }
+    }
+
+    if(courseSearchResults && courseSearchResults.length){
+      courseSearchResults.slice(0,8).forEach(function(c){
+        var row = el("div", {
+          style:"padding:10px 0; border-bottom:1px dotted var(--line); cursor:pointer;",
+          onclick:function(){ loadCourse(c.id); }
+        });
+        row.appendChild(el("div", {style:"font-weight:600; font-size:13.5px;"}, [c.course_name || c.name]));
+        row.appendChild(el("div", {class:"breakdown"}, [[c.city, c.state].filter(Boolean).join(", ") + (c.par ? " · Par " + c.par : "")]));
+        courseCard.appendChild(row);
+      });
+    } else if(courseSearchResults && courseSearchResults.length === 0){
+      courseCard.appendChild(el("div", {class:"note"}, ["No courses found for that search."]));
+    }
+
+    main.appendChild(courseCard);
+
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Who's playing"]));
+    card.appendChild(el("label", {class:"field-label"}, ["Round name (optional)"]));
+    card.appendChild(el("input", {
+      class:"name-input", type:"text", placeholder:"e.g. Saturday skins",
+      value: state.roundName,
+      oninput:function(e){ state.roundName = e.target.value; saveState(); }
+    }));
     card.appendChild(el("div", {class:"eyebrow"}, ["Group size"]));
     var sizeRow = el("div", {class:"choice-row"});
     [2,3,4,5,6].forEach(function(n){
@@ -1757,8 +2265,6 @@
     card.appendChild(scroll);
     card.appendChild(el("div", {class:"note"}, [
       "G = greenie, S = sandy, P = poley, B = birdie, E = eagle, \"3P\"/\"4P\" = hit their putt limit that hole (paid out to the table). Birdies show green, eagles gold, double-bogey-or-worse red. Wolf row: initial + ✓/✗/= for that hole's result, ×N when carry-over stakes applied. Swipe to see all 18 holes."
-      "Cumulative winnings after each hole (Wolf + Dots × $" + state.dollarPerPoint + "/pt). Swipe sideways for the full round."
- main
     ]));
     main.appendChild(card);
   }
@@ -1930,7 +2436,6 @@
     renderPayouts(main, names, wolfGross, dotRes.totals, holder);
 
     if(state.dollarPerPoint > 0){
- main
       renderMoneyCard(main, names);
     }
 
@@ -1975,10 +2480,7 @@
 
   if(IS_READONLY) document.body.className += " viewer";
   if(IS_VIEWER) startViewer();
-  else{
-    loadState();
-    if(SYNC_CONFIG && state.shareCode) ensureSync(pushSync); // resume sharing after reload
-  }
+  else initAuth();
 })();
 </script>
 </body>
