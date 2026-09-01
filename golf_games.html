@@ -1466,8 +1466,15 @@
   // crowdsourced dataset, so it's treated as optional rather than required
   // — a course with par-only data still loads, just without auto-filled
   // Stroke Index for holes that are missing it.
+  function firstArrayField(a, b){
+    if(Array.isArray(a)) return a;
+    if(Array.isArray(b)) return b;
+    return null;
+  }
+
   function parseCourseHoles(data){
-    var raw = data.holes || data.scorecard || (data.course && (data.course.holes || data.course.scorecard));
+    var raw = firstArrayField(data.holes, data.scorecard) ||
+      (data.course && firstArrayField(data.course.holes, data.course.scorecard));
     if(!raw) return null;
     var list = Array.isArray(raw) ? raw : Object.keys(raw).map(function(k){ return Object.assign({hole: parseInt(k,10)}, raw[k]); });
     var out = {};
