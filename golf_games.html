@@ -123,22 +123,21 @@
     font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:0.6px;
     color:var(--gold-soft); opacity:0.85; text-transform:uppercase;
   }
-  .hole-meta select{
-    background:rgba(255,255,255,0.06); color:var(--paper); border:1px solid rgba(255,255,255,0.3);
-    border-radius:7px; font-family:'Space Mono',monospace; font-size:12px; padding:4px 8px;
+  .hole-meta-value{
+    background:rgba(255,255,255,0.06); color:var(--paper); border:1px solid rgba(255,255,255,0.18);
+    border-radius:7px; font-family:'Space Mono',monospace; font-weight:700; font-size:12px; padding:4px 10px;
   }
 
   /* full 18-hole tap-to-jump strip */
   .hole-strip{
     position:relative; z-index:1;
     margin-top:12px;
-    display:flex; gap:6px;
-    overflow-x:auto;
-    padding-bottom:2px;
+    display:grid;
+    grid-template-columns:repeat(9, 1fr);
+    gap:5px;
   }
   .hole-strip button{
-    flex:0 0 auto;
-    width:34px;
+    width:100%;
     background:rgba(255,255,255,0.06);
     border:1px solid rgba(255,255,255,0.18);
     border-radius:8px;
@@ -515,15 +514,11 @@
     <div class="hole-meta" id="holeMetaBlock">
       <div class="field">
         <label>Par</label>
-        <select id="parSelect">
-          <option value="3">3</option>
-          <option value="4" selected>4</option>
-          <option value="5">5</option>
-        </select>
+        <div class="hole-meta-value" id="parDisplay">4</div>
       </div>
       <div class="field">
         <label>Stroke Index</label>
-        <select id="hcpSelect"></select>
+        <div class="hole-meta-value" id="hcpDisplay">1</div>
       </div>
     </div>
     <div class="hole-strip" id="holeStrip"></div>
@@ -1251,14 +1246,6 @@
     return el("div", {class:"avatar", style:"background:"+SWATCHES[pi]}, [names[pi].charAt(0).toUpperCase()]);
   }
 
-  function populateHcpSelect(){
-    var sel = document.getElementById("hcpSelect");
-    sel.innerHTML = "";
-    for(var i=1;i<=18;i++){
-      sel.appendChild(el("option", {value:i}, [String(i)]));
-    }
-  }
-
   function strokesStrip(hole){
     var names = activeNames();
     var strip = el("div", {class:"strokes-strip"});
@@ -1304,8 +1291,8 @@
     var roundLabelEl = document.getElementById("roundLabel");
     if(showHoleNav){
       document.getElementById("holeNum").textContent = state.currentHole;
-      document.getElementById("parSelect").value = state.holePar[state.currentHole] || 4;
-      document.getElementById("hcpSelect").value = holeHcpIndex(state.currentHole);
+      document.getElementById("parDisplay").textContent = state.holePar[state.currentHole] || 4;
+      document.getElementById("hcpDisplay").textContent = holeHcpIndex(state.currentHole);
       roundLabelEl.textContent = "HOLE " + state.currentHole + " OF 18 · " + state.activePlayers + "P";
       renderHoleStrip();
     } else if(activeTab === "dashboard"){
@@ -1936,6 +1923,41 @@
     }
     main.appendChild(uploadCard);
 
+    var courseSetupCard = el("div", {class:"card"});
+    courseSetupCard.appendChild(el("h2", {}, ["📋 Course setup"]));
+    courseSetupCard.appendChild(el("div", {class:"note"}, [
+      "Par and Stroke Index for all 18 holes — set here once, filled automatically by course search or scorecard upload above. Locked everywhere else so nothing gets bumped by accident mid-round."
+    ]));
+    var csTable = el("table", {class:"scorecard", style:"width:100%; margin-top:8px;"});
+    var csHead = el("tr");
+    csHead.appendChild(el("th", {class:"label"}, ["Hole"]));
+    csHead.appendChild(el("th", {}, ["Par"]));
+    csHead.appendChild(el("th", {}, ["S.I."]));
+    csTable.appendChild(csHead);
+    for(var csh=1; csh<=18; csh++){
+      (function(h){
+        var row = el("tr");
+        row.appendChild(el("th", {class:"label"}, [String(h)]));
+        var parCell = el("td");
+        parCell.appendChild(el("input", {
+          type:"number", min:"3", max:"5", style:"width:44px; text-align:center; padding:4px;",
+          value: state.holePar[h] || 4,
+          oninput:function(e){ state.holePar[h] = parseInt(e.target.value,10) || 4; saveState(); }
+        }));
+        row.appendChild(parCell);
+        var hcpCell = el("td");
+        hcpCell.appendChild(el("input", {
+          type:"number", min:"1", max:"18", style:"width:44px; text-align:center; padding:4px;",
+          value: holeHcpIndex(h),
+          oninput:function(e){ state.holeHcp[h] = parseInt(e.target.value,10) || h; saveState(); }
+        }));
+        row.appendChild(hcpCell);
+        csTable.appendChild(row);
+      })(csh);
+    }
+    courseSetupCard.appendChild(csTable);
+    main.appendChild(courseSetupCard);
+
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Who's playing"]));
     card.appendChild(el("label", {class:"field-label"}, ["Round name (optional)"]));
@@ -2400,6 +2422,38 @@
     }
   }
 
+  function threePuttersOnHole(hole){
+    var out = [];
+    for(var pi=0; pi<state.activePlayers; pi++){
+      var putts = puttsFor(pi, hole);
+      if(putts !== null && putts >= puttThreshold(pi)) out.push(pi);
+    }
+    return out;
+  }
+
+  // Everything a player earned on this specific hole: their own manual dots
+  // (greenie/sandy/poley), auto birdie/eagle from gross score, plus their
+  // share of any 3-putt payouts triggered by OTHER players this hole.
+  function dotsEarnedThisHole(pi, hole){
+    var par = state.holePar[hole] || 4;
+    var pData = (state.dots[hole] && state.dots[hole][pi]) || {};
+    var total = 0;
+    if(par === 3 && pData.greenie) total += state.points.greenie;
+    if(pData.sandy) total += state.points.sandy;
+    if(pData.poley) total += state.points.poley;
+    var g = grossFor(pi, hole);
+    if(g !== null){
+      var diff = g - par;
+      if(diff <= -2) total += state.points.eagle;
+      else if(diff === -1) total += state.points.birdie;
+    }
+    var putters = threePuttersOnHole(hole);
+    if(putters.indexOf(pi) === -1 && putters.length > 0){
+      total += putters.length * state.points.threeputt;
+    }
+    return total;
+  }
+
   function renderDots(main){
     var hole = state.currentHole;
     var n = state.activePlayers;
@@ -2428,14 +2482,23 @@
         var pc = el("div", {class:"player-cell"}, [names[pi]]);
         if(s>0) pc.appendChild(el("span", {class:"badge"}, ["+" + s + " stroke" + (s>1?"s":"")]));
         if(thresh > 3) pc.appendChild(el("span", {class:"badge"}, [thresh + "-putt rule"]));
+        var holeDots = dotsEarnedThisHole(pi, hole);
+        if(holeDots > 0) pc.appendChild(el("span", {class:"badge", style:"color:var(--turf);"}, ["+" + holeDots + " dot" + (holeDots===1?"":"s") + " this hole"]));
         nameCell.appendChild(pc);
         tr.appendChild(nameCell);
         DOT_KEYS.forEach(function(d){
           var td = el("td");
           if(d.key === "threeputt"){
-            var putts = puttsFor(pi, hole);
-            var hit = putts !== null && putts >= thresh;
-            td.appendChild(el("div", {class:"dotbox neg" + (hit?" on":"")}, [hit ? "●" : ""]));
+            var putters = threePuttersOnHole(hole);
+            var isPutter = putters.indexOf(pi) !== -1;
+            if(isPutter){
+              td.appendChild(el("div", {class:"dotbox neg on"}, ["●"]));
+            } else if(putters.length > 0){
+              var gain = putters.length * state.points.threeputt;
+              td.appendChild(el("div", {class:"dotbox on", style:"font-size:10px; font-weight:700;"}, ["+" + gain]));
+            } else {
+              td.appendChild(el("div", {class:"dotbox neg"}, [""]));
+            }
           } else if(d.key === "birdie" || d.key === "eagle"){
             var g = grossFor(pi, hole);
             var ddiff = g !== null ? g - par : null;
@@ -2460,7 +2523,7 @@
     }
     card.appendChild(table);
     card.appendChild(el("div", {class:"note"}, [
-      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s (grayed out otherwise). The 3-Putt column is automatic from putts entered in the Score tab — each player's putt threshold is set in Setup (see the badge under their name if not the default 3)."
+      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s (grayed out otherwise). 3-Putt is automatic from putts entered in the Score tab: the red box marks who 3-putted, and everyone else shows the dots they picked up from it. Each player's total dots for this hole shows under their name."
     ]));
     main.appendChild(card);
 
@@ -2806,21 +2869,11 @@
   }
 
   // ---------------- EVENTS ----------------
-  populateHcpSelect();
-
   document.getElementById("prevHole").addEventListener("click", function(){
     if(state.currentHole > 1){ state.currentHole--; saveState(); render(); }
   });
   document.getElementById("nextHole").addEventListener("click", function(){
     if(state.currentHole < 18){ state.currentHole++; saveState(); render(); }
-  });
-  document.getElementById("parSelect").addEventListener("change", function(e){
-    state.holePar[state.currentHole] = parseInt(e.target.value,10);
-    saveState(); render();
-  });
-  document.getElementById("hcpSelect").addEventListener("change", function(e){
-    state.holeHcp[state.currentHole] = parseInt(e.target.value,10);
-    saveState(); render();
   });
   document.querySelectorAll("#tabbar button").forEach(function(b){
     b.addEventListener("click", function(){
