@@ -198,28 +198,32 @@
   .status-badge.live{ background:var(--gold); color:var(--fairway); }
   .status-badge.idle{ background:rgba(255,255,255,0.15); color:var(--paper); }
 
-  /* ---------- Tabs ---------- */
-  nav.tabs{
-    display:flex;
-    background:var(--fairway-2);
-    position:sticky; top:0; z-index:5;
+  /* ---------- Sub-tabs (inside the Round section) ---------- */
+  .subtabs{
+    position:relative; z-index:1;
+    margin-top:12px;
+    display:flex; gap:6px;
+    overflow-x:auto;
   }
-  nav.tabs button{
-    flex:1;
-    padding:11px 1px;
-    background:none;
-    border:none;
-    color:rgba(243,238,223,0.55);
+  .subtabs button{
+    flex:0 0 auto;
+    padding:8px 14px;
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.16);
+    border-radius:999px;
+    color:rgba(243,238,223,0.75);
     font-family:'Space Mono',monospace;
-    font-size:8.5px;
-    letter-spacing:0.15px;
+    font-size:10.5px;
+    letter-spacing:0.3px;
     text-transform:uppercase;
-    border-bottom:3px solid transparent;
     cursor:pointer;
+    white-space:nowrap;
   }
-  nav.tabs button.active{
-    color:var(--paper);
-    border-bottom-color:var(--gold);
+  .subtabs button.active{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:var(--fairway);
+    font-weight:700;
   }
 
   /* ---------- Main content ---------- */
@@ -455,16 +459,19 @@
   .tabbar button{
     flex:1;
     background:none; border:none;
-    display:flex; flex-direction:column; align-items:center; gap:2px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
     color:rgba(243,238,223,0.5);
-    padding:6px 1px;
+    padding:8px 2px;
     cursor:pointer;
     font-family:'Inter',sans-serif;
-    font-size:8.5px;
+    font-size:11px;
     font-weight:600;
   }
-  .tabbar button .ic{ font-size:15px; }
+  .tabbar button .ic{ font-size:20px; }
   .tabbar button.active{ color:var(--gold); }
+
+  /* header sections hidden outside the hole-scoring context (Score/Wolf/Snake/Dots) */
+  header.compact .hole-nav, header.compact .hole-meta, header.compact .hole-strip{ display:none; }
 
   ::-webkit-scrollbar{ display:none; }
 
@@ -489,12 +496,12 @@
 <body>
 <div id="app">
 
-  <header>
+  <header id="pageHeader">
     <div class="brand">
       <h1>Clubhouse Ledger</h1>
       <div class="sub" id="roundLabel">18-HOLE ROUND</div>
     </div>
-    <div class="hole-nav">
+    <div class="hole-nav" id="holeNavBlock">
       <button id="prevHole" aria-label="Previous hole">‹</button>
       <div class="pin">
         <svg viewBox="0 0 20 26" fill="none">
@@ -505,7 +512,7 @@
       </div>
       <button id="nextHole" aria-label="Next hole">›</button>
     </div>
-    <div class="hole-meta">
+    <div class="hole-meta" id="holeMetaBlock">
       <div class="field">
         <label>Par</label>
         <select id="parSelect">
@@ -520,26 +527,14 @@
       </div>
     </div>
     <div class="hole-strip" id="holeStrip"></div>
+    <div class="subtabs" id="subtabs"></div>
   </header>
-
-  <nav class="tabs" id="tabs">
-    <button data-tab="setup" class="active">Setup</button>
-    <button data-tab="score">Score</button>
-    <button data-tab="wolf">Wolf</button>
-    <button data-tab="snake">Snake</button>
-    <button data-tab="dots">Dots</button>
-    <button data-tab="summary">Ledger</button>
-    <button data-tab="history">History</button>
-  </nav>
 
   <main id="main"></main>
 
   <div class="tabbar" id="tabbar">
-    <button data-tab="setup" class="active"><span class="ic">⛳</span>Setup</button>
-    <button data-tab="score"><span class="ic">#</span>Score</button>
-    <button data-tab="wolf"><span class="ic">🐺</span>Wolf</button>
-    <button data-tab="snake"><span class="ic">🐍</span>Snake</button>
-    <button data-tab="dots"><span class="ic">•</span>Dots</button>
+    <button data-tab="dashboard" class="active"><span class="ic">🏠</span>Dashboard</button>
+    <button data-tab="round"><span class="ic">⛳</span>Round</button>
     <button data-tab="summary"><span class="ic">Σ</span>Ledger</button>
     <button data-tab="history"><span class="ic">📜</span>History</button>
   </div>
@@ -589,7 +584,8 @@
   };
 
   var state = null;
-  var activeTab = "setup";
+  var activeTab = "dashboard"; // dashboard | round | summary | history
+  var activeSubTab = "setup";   // setup | score | wolf | snake | dots (only used within "round")
   var STORAGE_KEY = "clubhouse_ledger_round_v2";
 
   function clone(o){ return JSON.parse(JSON.stringify(o)); }
@@ -688,7 +684,7 @@
   function authSignOut(){
     firebase.auth().signOut();
     state = null;
-    activeTab = "setup";
+    activeTab = "dashboard";
   }
 
   function authResetPassword(email){
@@ -1302,14 +1298,28 @@
       return;
     }
 
-    document.getElementById("holeNum").textContent = state.currentHole;
-    document.getElementById("parSelect").value = state.holePar[state.currentHole] || 4;
-    document.getElementById("hcpSelect").value = holeHcpIndex(state.currentHole);
-    document.getElementById("roundLabel").textContent =
-      "HOLE " + state.currentHole + " OF 18 · " + state.activePlayers + "P";
-    renderHoleStrip();
+    var headerEl = document.getElementById("pageHeader");
+    var showHoleNav = (activeTab === "round") && ["score","wolf","snake","dots"].indexOf(activeSubTab) !== -1;
+    headerEl.className = showHoleNav ? "" : "compact";
+    var roundLabelEl = document.getElementById("roundLabel");
+    if(showHoleNav){
+      document.getElementById("holeNum").textContent = state.currentHole;
+      document.getElementById("parSelect").value = state.holePar[state.currentHole] || 4;
+      document.getElementById("hcpSelect").value = holeHcpIndex(state.currentHole);
+      roundLabelEl.textContent = "HOLE " + state.currentHole + " OF 18 · " + state.activePlayers + "P";
+      renderHoleStrip();
+    } else if(activeTab === "dashboard"){
+      roundLabelEl.textContent = "DASHBOARD";
+    } else if(activeTab === "round"){
+      roundLabelEl.textContent = "ROUND SETUP";
+    } else if(activeTab === "summary"){
+      roundLabelEl.textContent = "LEDGER & PAYOUTS";
+    } else if(activeTab === "history"){
+      roundLabelEl.textContent = "ROUND HISTORY";
+    }
+    renderSubtabs();
 
-    document.querySelectorAll("#tabs button, #tabbar button").forEach(function(b){
+    document.querySelectorAll("#tabbar button").forEach(function(b){
       b.classList.toggle("active", b.dataset.tab === activeTab);
     });
 
@@ -1333,14 +1343,30 @@
         }, ["← Back to current round"])
       ]));
     }
-    if(activeTab === "setup") renderSetup(main);
+    if(activeTab === "dashboard") renderDashboard(main);
     else if(activeTab === "history") renderHistory(main);
-    else if(!haveNames()) renderNeedSetup(main);
-    else if(activeTab === "score") renderScore(main);
-    else if(activeTab === "wolf") renderWolf(main);
-    else if(activeTab === "snake") renderSnake(main);
-    else if(activeTab === "dots") renderDots(main);
     else if(activeTab === "summary") renderSummary(main);
+    else if(activeTab === "round"){
+      if(activeSubTab === "setup") renderRoundSetup(main);
+      else if(!haveNames()) renderNeedSetup(main);
+      else if(activeSubTab === "score") renderScore(main);
+      else if(activeSubTab === "wolf") renderWolf(main);
+      else if(activeSubTab === "snake") renderSnake(main);
+      else if(activeSubTab === "dots") renderDots(main);
+    }
+  }
+
+  function renderSubtabs(){
+    var strip = document.getElementById("subtabs");
+    if(activeTab !== "round"){ strip.innerHTML = ""; strip.style.display = "none"; return; }
+    strip.style.display = "flex";
+    strip.innerHTML = "";
+    [["setup","Setup"],["score","Score"],["wolf","Wolf"],["snake","Snake"],["dots","Dots"]].forEach(function(t){
+      strip.appendChild(el("button", {
+        class: activeSubTab === t[0] ? "active" : "",
+        onclick: function(id){ return function(){ activeSubTab = id; render(); }; }(t[0])
+      }, [t[1]]));
+    });
   }
 
   function renderNeedSetup(main){
@@ -1348,7 +1374,11 @@
       el("div", {class:"empty"}, [
         el("div", {class:"big"}, ["⛳"]),
         el("div", {}, ["Add your group in Setup before keeping score."])
-      ])
+      ]),
+      el("button", {
+        class:"primary", style:"margin-top:6px;",
+        onclick:function(){ activeSubTab = "setup"; render(); }
+      }, ["Go to Setup"])
     ]));
   }
 
@@ -1566,9 +1596,17 @@
 
       card.appendChild(el("button", {
         class:"primary", style:"background:var(--gold); color:var(--fairway); margin-top:4px;",
-        onclick:function(){ activeTab = "score"; render(); }
+        onclick:function(){ activeTab = "round"; activeSubTab = "score"; render(); }
       }, [live ? "Continue scoring →" : "Start scoring →"]));
       hero.appendChild(card);
+    } else {
+      var newCard = el("div", {class:"active-round-card", style:"text-align:center;"});
+      newCard.appendChild(el("div", {class:"name"}, ["No round set up yet"]));
+      newCard.appendChild(el("button", {
+        class:"primary", style:"background:var(--gold); color:var(--fairway); margin-top:10px;",
+        onclick:function(){ activeTab = "round"; activeSubTab = "setup"; render(); }
+      }, ["+ New round"]));
+      hero.appendChild(newCard);
     }
 
     return hero;
@@ -1727,9 +1765,33 @@
     render();
   }
 
-  function renderSetup(main){
+  function renderDashboard(main){
     main.appendChild(renderDashboardHero());
 
+    if(SYNC_CONFIG && currentUser){
+      if(archivedRounds === null){ loadArchivedRounds(); return; }
+      if(archivedRounds.length > 0){
+        var recentCard = el("div", {class:"card"});
+        var headRow = el("div", {style:"display:flex; justify-content:space-between; align-items:center;"});
+        headRow.appendChild(el("h2", {style:"margin:0;"}, ["Recent rounds"]));
+        headRow.appendChild(el("button", {
+          class:"ghost", style:"margin:0; width:auto; padding:6px 12px; font-size:12px;",
+          onclick:function(){ activeTab = "history"; render(); }
+        }, ["View all"]));
+        recentCard.appendChild(headRow);
+        main.appendChild(recentCard);
+        archivedRounds.slice(0,3).forEach(function(entry){
+          var row = el("div", {class:"card", style:"cursor:pointer;", onclick:function(){ viewArchivedRound(entry); }});
+          row.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.roundName || entry.date || "Unknown date"]));
+          if(entry.roundName) row.appendChild(el("div", {class:"eyebrow", style:"margin:2px 0 0;"}, [entry.date]));
+          row.appendChild(el("div", {class:"breakdown"}, [(entry.players || []).join(", ")]));
+          main.appendChild(row);
+        });
+      }
+    }
+  }
+
+  function renderRoundSetup(main){
     if(SYNC_CONFIG && currentUser){
       var acct = el("div", {class:"card", style:"display:flex; align-items:center; justify-content:space-between;"});
       acct.appendChild(el("div", {}, [
@@ -2760,7 +2822,7 @@
     state.holeHcp[state.currentHole] = parseInt(e.target.value,10);
     saveState(); render();
   });
-  document.querySelectorAll("#tabs button, #tabbar button").forEach(function(b){
+  document.querySelectorAll("#tabbar button").forEach(function(b){
     b.addEventListener("click", function(){
       activeTab = this.dataset.tab;
       render();
