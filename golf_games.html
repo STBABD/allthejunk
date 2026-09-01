@@ -816,6 +816,8 @@
   var courseSearchStatus = "idle"; // idle | loading | error
   var courseLoadStatus = "idle";   // idle | loading | error | loaded
   var courseLoadDebug = null;      // raw JSON shown if we couldn't parse hole data, for troubleshooting
+  var courseLoadParCount = 0;
+  var courseLoadHcpCount = 0;
   var viewingArchiveId = null;
   var savedLiveState = null;
 
@@ -1404,6 +1406,40 @@
 
   var OPENGOLF_BASE = "https://api.opengolfapi.org/v1";
 
+  // ---------------- SCORECARD UPLOAD (image/PDF -> par + stroke index) ----------------
+  var scorecardUpload = { status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null };
+  var showScorecardDebug = false;
+  // idle | reading | parsing | ready | error
+
+  function ensurePdfJs(cb){
+    if(window.pdfjsLib){ cb(); return; }
+    window.addEventListener("pdfjs-ready", function handler(){
+      window.removeEventListener("pdfjs-ready", handler);
+      cb();
+    });
+    var s = document.createElement("script");
+    s.type = "module";
+    s.textContent =
+      "import * as pdfjsLib from 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.min.mjs';" +
+      "pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';" +
+      "window.pdfjsLib = pdfjsLib;" +
+      "window.dispatchEvent(new Event('pdfjs-ready'));";
+    document.head.appendChild(s);
+  }
+
+  function ensureTesseract(cb){
+    if(window.Tesseract){ cb(); return; }
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    s.onload = cb;
+    s.onerror = function(){
+      scorecardUpload.status = "error";
+      scorecardUpload.errorMsg = "Couldn't load the text-recognition library — check your connection and try again.";
+      render();
+    };
+    document.head.appendChild(s);
+  }
+
   function searchCourses(query){
     if(!query.trim()){ return; }
     courseSearchStatus = "loading"; courseSearchResults = null; render();
@@ -1425,20 +1461,24 @@
   // confirmed yet — this tries several plausible shapes and falls back to
   // showing the raw response so it can be fixed quickly if the real shape
   // differs.
+  // Par is reliably present in OpenGolfAPI's response; the stroke index
+  // (handicap) field is not always populated for every course in their
+  // crowdsourced dataset, so it's treated as optional rather than required
+  // — a course with par-only data still loads, just without auto-filled
+  // Stroke Index for holes that are missing it.
   function parseCourseHoles(data){
     var raw = data.holes || data.scorecard || (data.course && (data.course.holes || data.course.scorecard));
     if(!raw) return null;
     var list = Array.isArray(raw) ? raw : Object.keys(raw).map(function(k){ return Object.assign({hole: parseInt(k,10)}, raw[k]); });
     var out = {};
-    var ok = true;
     list.forEach(function(h){
       var num = h.hole || h.number || h.hole_number;
       var par = h.par;
       var idx = h.handicap != null ? h.handicap : (h.handicap_index != null ? h.handicap_index : (h.stroke_index != null ? h.stroke_index : h.hcp));
-      if(num == null || par == null || idx == null){ ok = false; return; }
-      out[num] = {par: par, hcp: idx};
+      if(num == null || par == null) return; // skip holes with no usable par at all
+      out[num] = {par: par, hcp: (idx != null ? idx : null)};
     });
-    if(!ok || Object.keys(out).length < 9) return null; // didn't find enough usable holes — bail to raw fallback
+    if(Object.keys(out).length < 9) return null; // didn't find enough usable holes — bail to raw fallback
     return out;
   }
 
@@ -1454,12 +1494,16 @@
           render();
           return;
         }
+        var parCount = 0, hcpCount = 0;
         Object.keys(holes).forEach(function(num){
           state.holePar[num] = holes[num].par;
-          state.holeHcp[num] = holes[num].hcp;
+          parCount++;
+          if(holes[num].hcp != null){ state.holeHcp[num] = holes[num].hcp; hcpCount++; }
         });
         saveState();
         courseLoadStatus = "loaded";
+        courseLoadParCount = parCount;
+        courseLoadHcpCount = hcpCount;
         courseSearchResults = null;
         courseSearchQuery = "";
         render();
@@ -1523,6 +1567,159 @@
     return hero;
   }
 
+  function handleScorecardFile(file){
+    if(!file) return;
+    scorecardUpload = {status:"reading", errorMsg:null, previewUrl:null, rawText:"", holes:null};
+    render();
+    if(file.type === "application/pdf"){
+      readPdfScorecard(file);
+    } else if(file.type.indexOf("image/") === 0){
+      readImageScorecard(file);
+    } else {
+      scorecardUpload.status = "error";
+      scorecardUpload.errorMsg = "Please upload an image (JPG/PNG) or a PDF.";
+      render();
+    }
+  }
+
+  function readPdfScorecard(file){
+    ensurePdfJs(function(){
+      var reader = new FileReader();
+      reader.onload = function(){
+        var typedArray = new Uint8Array(reader.result);
+        window.pdfjsLib.getDocument({data: typedArray}).promise.then(function(pdf){
+          return pdf.getPage(1).then(function(page){
+            var viewport = page.getViewport({scale: 1.3});
+            var canvas = document.createElement("canvas");
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            var ctx = canvas.getContext("2d");
+            return page.render({canvasContext: ctx, viewport: viewport}).promise.then(function(){
+              scorecardUpload.previewUrl = canvas.toDataURL();
+              return page.getTextContent();
+            });
+          });
+        }).then(function(textContent){
+          var text = textContent.items.map(function(it){ return it.str; }).join(" ");
+          if(text.trim().length < 10){
+            // no real text layer -- likely a scanned image saved as PDF
+            scorecardUpload.status = "error";
+            scorecardUpload.errorMsg = "This PDF doesn't have readable text in it (probably a scanned image). Try uploading it as an image (JPG/PNG) instead, or enter holes manually.";
+            render();
+            return;
+          }
+          scorecardUpload.rawText = text;
+          finishScorecardParse(text);
+        }).catch(function(e){
+          console.error("pdf read failed", e);
+          scorecardUpload.status = "error";
+          scorecardUpload.errorMsg = "Couldn't read that PDF. Try the image upload instead, or enter holes manually.";
+          render();
+        });
+      };
+      reader.onerror = function(){
+        scorecardUpload.status = "error";
+        scorecardUpload.errorMsg = "Couldn't read that file.";
+        render();
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  function readImageScorecard(file){
+    var reader = new FileReader();
+    reader.onload = function(){
+      scorecardUpload.previewUrl = reader.result;
+      render();
+      ensureTesseract(function(){
+        scorecardUpload.status = "parsing"; render();
+        window.Tesseract.recognize(reader.result, "eng", {
+          tessedit_pageseg_mode: 6 // uniform block of text -- tends to do better on dense printed tables than full auto-segmentation
+        })
+          .then(function(result){
+            var text = result.data.text;
+            scorecardUpload.rawText = text;
+            finishScorecardParse(text);
+          })
+          .catch(function(e){
+            console.error("ocr failed", e);
+            scorecardUpload.status = "error";
+            scorecardUpload.errorMsg = "Couldn't read text from that image — try a clearer, straight-on photo, or enter holes manually.";
+            render();
+          });
+      });
+    };
+    reader.onerror = function(){
+      scorecardUpload.status = "error";
+      scorecardUpload.errorMsg = "Couldn't read that file.";
+      render();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Best-effort: find the "Par" and "Handicap/Index" label in the extracted
+  // text and grab the numbers that follow, filtered to a plausible range
+  // (this skips OUT/IN/TOTAL subtotals like 36 or 72). Always reviewed and
+  // editable before anything is saved — this is a head start, not a
+  // guarantee.
+  // Many scorecards print two separate Par/Handicap rows -- one for Men,
+  // one for Ladies (often split by a middle "HOLES 1 2 3..." row, or by the
+  // word "LADIES" itself). Searching the whole text finds whichever occurs
+  // first, which is usually Men's — correct here — but if a "Ladies"/second
+  // section marker appears BEFORE the label we're hunting for, we've
+  // wandered past the men's row entirely, so we cut the search text off at
+  // that marker rather than risk grabbing the wrong row.
+  function boundedSearchText(text){
+    var stopMarkers = [/\bladies/i, /\bwomen/i, /\bforward\b/i];
+    var cut = text.length;
+    stopMarkers.forEach(function(re){
+      var m = re.exec(text);
+      if(m && m.index < cut) cut = m.index;
+    });
+    return text.slice(0, cut);
+  }
+
+  function extractNumbersAfterLabel(text, labelRegex, maxCount, validRange){
+    var m = labelRegex.exec(text);
+    if(!m) return [];
+    var after = text.slice(m.index + m[0].length);
+    var nums = after.match(/\d+/g) || [];
+    var out = [];
+    for(var i=0; i<nums.length && out.length<maxCount; i++){
+      var v = parseInt(nums[i],10);
+      if(v < validRange[0] || v > validRange[1]) continue;
+      out.push(v);
+    }
+    return out;
+  }
+
+  function parseScorecardText(text){
+    var bounded = boundedSearchText(text);
+    var pars = extractNumbersAfterLabel(bounded, /\bpar\b/i, 18, [3,5]);
+    var hcps = extractNumbersAfterLabel(bounded, /\b(handicap|hdcp|hcp|stroke\s*index|s\.?i\.?|index)\b/i, 18, [1,18]);
+    var holes = {};
+    for(var h=1; h<=18; h++){
+      holes[h] = { par: pars[h-1] || null, hcp: hcps[h-1] || null };
+    }
+    return holes;
+  }
+
+  function finishScorecardParse(text){
+    scorecardUpload.holes = parseScorecardText(text);
+    scorecardUpload.status = "ready";
+    render();
+  }
+
+  function applyScorecardUpload(){
+    Object.keys(scorecardUpload.holes).forEach(function(num){
+      var h = scorecardUpload.holes[num];
+      if(h.par) state.holePar[num] = h.par;
+      if(h.hcp) state.holeHcp[num] = h.hcp;
+    });
+    saveState();
+    scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null};
+    render();
+  }
+
   function renderSetup(main){
     main.appendChild(renderDashboardHero());
 
@@ -1561,7 +1758,14 @@
     if(courseLoadStatus === "loading"){
       courseCard.appendChild(el("div", {class:"note"}, ["Loading scorecard…"]));
     } else if(courseLoadStatus === "loaded"){
-      courseCard.appendChild(el("div", {class:"note", style:"color:var(--turf);"}, ["Loaded ✓ — Par and Stroke Index filled in for all 18 holes. Check the header on Score/Wolf/etc to confirm."]));
+      courseCard.appendChild(el("div", {class:"note", style:"color:var(--turf);"}, [
+        "Loaded ✓ — Par filled in for " + courseLoadParCount + " holes." +
+        (courseLoadHcpCount === courseLoadParCount
+          ? " Stroke Index filled in too."
+          : courseLoadHcpCount > 0
+            ? " Stroke Index filled in for " + courseLoadHcpCount + " of " + courseLoadParCount + " — enter the rest manually from your scorecard."
+            : " Stroke Index wasn't included by OpenGolfAPI for this course — enter it manually from your scorecard if you're using handicaps.")
+      ]));
     } else if(courseLoadStatus === "error"){
       courseCard.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, ["Couldn't read hole data from that course's response. This means OpenGolfAPI's field names differ from what's expected — paste the debug output below back to Claude to fix the parsing."]));
       if(courseLoadDebug){
@@ -1584,6 +1788,84 @@
     }
 
     main.appendChild(courseCard);
+
+    var uploadCard = el("div", {class:"card"});
+    uploadCard.appendChild(el("h2", {}, ["📄 Or upload a scorecard"]));
+    uploadCard.appendChild(el("div", {class:"note"}, [
+      "Upload a photo or PDF of a scorecard (best with a clean, downloaded image or a text-based PDF, not a scanned copy). We'll pull out Par and Stroke Index for you to review before saving — always check it against the card."
+    ]));
+    if(scorecardUpload.status === "idle" || scorecardUpload.status === "error"){
+      uploadCard.appendChild(el("input", {
+        type:"file", accept:"image/*,.pdf", style:"margin-top:10px;",
+        onchange:function(e){ handleScorecardFile(e.target.files[0]); }
+      }));
+    }
+    if(scorecardUpload.status === "error"){
+      uploadCard.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, [scorecardUpload.errorMsg]));
+    }
+    if(scorecardUpload.status === "reading"){
+      uploadCard.appendChild(el("div", {class:"note"}, ["Reading file…"]));
+    }
+    if(scorecardUpload.status === "parsing"){
+      if(scorecardUpload.previewUrl){
+        uploadCard.appendChild(el("img", {src: scorecardUpload.previewUrl, style:"max-width:100%; border-radius:10px; margin-top:10px;"}));
+      }
+      uploadCard.appendChild(el("div", {class:"note"}, ["Reading text from the image — this can take a few seconds…"]));
+    }
+    if(scorecardUpload.status === "ready" && scorecardUpload.holes){
+      if(scorecardUpload.previewUrl){
+        uploadCard.appendChild(el("img", {src: scorecardUpload.previewUrl, style:"max-width:100%; border-radius:10px; margin:10px 0;"}));
+      }
+      uploadCard.appendChild(el("div", {class:"note"}, ["Review against the card above, fix anything wrong, then save. Leave a box blank to skip that hole."]));
+      var table = el("table", {class:"scorecard", style:"width:100%; margin-top:8px;"});
+      var head = el("tr");
+      head.appendChild(el("th", {class:"label"}, ["Hole"]));
+      head.appendChild(el("th", {}, ["Par"]));
+      head.appendChild(el("th", {}, ["S.I."]));
+      table.appendChild(head);
+      for(var hh=1; hh<=18; hh++){
+        (function(h){
+          var row = el("tr");
+          row.appendChild(el("th", {class:"label"}, [String(h)]));
+          var parCell = el("td");
+          parCell.appendChild(el("input", {
+            type:"number", min:"3", max:"5", style:"width:44px; text-align:center; padding:4px;",
+            value: scorecardUpload.holes[h].par || "",
+            oninput:function(e){ scorecardUpload.holes[h].par = e.target.value ? parseInt(e.target.value,10) : null; }
+          }));
+          row.appendChild(parCell);
+          var hcpCell = el("td");
+          hcpCell.appendChild(el("input", {
+            type:"number", min:"1", max:"18", style:"width:44px; text-align:center; padding:4px;",
+            value: scorecardUpload.holes[h].hcp || "",
+            oninput:function(e){ scorecardUpload.holes[h].hcp = e.target.value ? parseInt(e.target.value,10) : null; }
+          }));
+          row.appendChild(hcpCell);
+          table.appendChild(row);
+        })(hh);
+      }
+      uploadCard.appendChild(table);
+      var btnRow = el("div", {style:"display:flex; gap:8px; margin-top:12px;"});
+      btnRow.appendChild(el("button", {
+        class:"primary", style:"margin:0;",
+        onclick: applyScorecardUpload
+      }, ["Save to round"]));
+      btnRow.appendChild(el("button", {
+        class:"ghost", style:"margin:0; width:auto; padding:12px 18px;",
+        onclick:function(){ scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null}; render(); }
+      }, ["Cancel"]));
+      uploadCard.appendChild(btnRow);
+      if(scorecardUpload.rawText){
+        uploadCard.appendChild(el("button", {
+          class:"ghost", style:"margin-top:8px;",
+          onclick:function(){ showScorecardDebug = !showScorecardDebug; render(); }
+        }, [showScorecardDebug ? "Hide extracted text" : "If this looks wrong, show extracted text"]));
+        if(showScorecardDebug){
+          uploadCard.appendChild(el("div", {style:"font-family:monospace; font-size:9px; white-space:pre-wrap; background:var(--paper-2); padding:8px; border-radius:8px; max-height:200px; overflow-y:auto; margin-top:6px;"}, [scorecardUpload.rawText]));
+        }
+      }
+    }
+    main.appendChild(uploadCard);
 
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Who's playing"]));
