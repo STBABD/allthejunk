@@ -1408,6 +1408,7 @@
 
   // ---------------- SCORECARD UPLOAD (image/PDF -> par + stroke index) ----------------
   var scorecardUpload = { status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null };
+  var showScorecardDebug = false;
   // idle | reading | parsing | ready | error
 
   function ensurePdfJs(cb){
@@ -1631,7 +1632,9 @@
       render();
       ensureTesseract(function(){
         scorecardUpload.status = "parsing"; render();
-        window.Tesseract.recognize(reader.result, "eng")
+        window.Tesseract.recognize(reader.result, "eng", {
+          tessedit_pageseg_mode: 6 // uniform block of text -- tends to do better on dense printed tables than full auto-segmentation
+        })
           .then(function(result){
             var text = result.data.text;
             scorecardUpload.rawText = text;
@@ -1658,6 +1661,23 @@
   // (this skips OUT/IN/TOTAL subtotals like 36 or 72). Always reviewed and
   // editable before anything is saved — this is a head start, not a
   // guarantee.
+  // Many scorecards print two separate Par/Handicap rows -- one for Men,
+  // one for Ladies (often split by a middle "HOLES 1 2 3..." row, or by the
+  // word "LADIES" itself). Searching the whole text finds whichever occurs
+  // first, which is usually Men's — correct here — but if a "Ladies"/second
+  // section marker appears BEFORE the label we're hunting for, we've
+  // wandered past the men's row entirely, so we cut the search text off at
+  // that marker rather than risk grabbing the wrong row.
+  function boundedSearchText(text){
+    var stopMarkers = [/\bladies/i, /\bwomen/i, /\bforward\b/i];
+    var cut = text.length;
+    stopMarkers.forEach(function(re){
+      var m = re.exec(text);
+      if(m && m.index < cut) cut = m.index;
+    });
+    return text.slice(0, cut);
+  }
+
   function extractNumbersAfterLabel(text, labelRegex, maxCount, validRange){
     var m = labelRegex.exec(text);
     if(!m) return [];
@@ -1673,8 +1693,9 @@
   }
 
   function parseScorecardText(text){
-    var pars = extractNumbersAfterLabel(text, /\bpar\b/i, 18, [3,5]);
-    var hcps = extractNumbersAfterLabel(text, /\b(handicap|hdcp|hcp|stroke\s*index|s\.?i\.?|index)\b/i, 18, [1,18]);
+    var bounded = boundedSearchText(text);
+    var pars = extractNumbersAfterLabel(bounded, /\bpar\b/i, 18, [3,5]);
+    var hcps = extractNumbersAfterLabel(bounded, /\b(handicap|hdcp|hcp|stroke\s*index|s\.?i\.?|index)\b/i, 18, [1,18]);
     var holes = {};
     for(var h=1; h<=18; h++){
       holes[h] = { par: pars[h-1] || null, hcp: hcps[h-1] || null };
@@ -1834,6 +1855,15 @@
         onclick:function(){ scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null}; render(); }
       }, ["Cancel"]));
       uploadCard.appendChild(btnRow);
+      if(scorecardUpload.rawText){
+        uploadCard.appendChild(el("button", {
+          class:"ghost", style:"margin-top:8px;",
+          onclick:function(){ showScorecardDebug = !showScorecardDebug; render(); }
+        }, [showScorecardDebug ? "Hide extracted text" : "If this looks wrong, show extracted text"]));
+        if(showScorecardDebug){
+          uploadCard.appendChild(el("div", {style:"font-family:monospace; font-size:9px; white-space:pre-wrap; background:var(--paper-2); padding:8px; border-radius:8px; max-height:200px; overflow-y:auto; margin-top:6px;"}, [scorecardUpload.rawText]));
+        }
+      }
     }
     main.appendChild(uploadCard);
 
