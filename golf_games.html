@@ -680,7 +680,6 @@
     <button data-tab="dashboard" class="active"><span class="ic">🏠</span>Dashboard</button>
     <button data-tab="round"><span class="ic">⛳</span>Round</button>
     <button data-tab="summary"><span class="ic">Σ</span>Ledger</button>
-    <button data-tab="history"><span class="ic">📜</span>History</button>
   </div>
 
 </div>
@@ -712,6 +711,7 @@
     currentHole: 1,
     roundName: "",
     courseName: "",
+    gamesEnabled: {wolf:true, snake:true, dots:true, nassau:false},
     holePar: {},               // hole -> 3/4/5
     holeHcp: {},                // hole -> stroke index 1-18
     wolf: {},                   // hole -> {wolf:idx, partners:[idx,...], result:'wolfwin'|'oppwin'|'push', manual:bool}
@@ -944,6 +944,7 @@
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
     if(state.snakeStake === undefined) state.snakeStake = 1;
         if(state.courseName === undefined) state.courseName = "";
+        if(!state.gamesEnabled) state.gamesEnabled = {wolf:true, snake:true, dots:true, nassau:false};
   }
 
   // ---------------- ROUND HISTORY (cross-device archive) ----------------
@@ -952,6 +953,7 @@
   // permanent snapshot per completed round, readable from any device.
   var archiveStatus = "idle"; // idle | saving | saved | error
   var archivedRounds = null;  // cached list once loaded
+  var archiveLoadError = null;
   var claimMessage = null;
   var courseSearchQuery = "";
   var courseSearchResults = null; // null = not searched yet, [] = no results, [...] = results
@@ -973,6 +975,7 @@
       updated: Date.now(),
       roundName: state.roundName.trim(),
       courseName: state.courseName.trim(),
+      gamesEnabled: state.gamesEnabled,
       players: state.players.slice(0, state.activePlayers),
       ownerUid: currentUser.uid,
       state: JSON.stringify(state)
@@ -999,9 +1002,15 @@
           });
           list.sort(function(a,b){ return (b.updated||0) - (a.updated||0); });
           archivedRounds = list;
+          archiveLoadError = null;
           render();
         })
-        .catch(function(e){ console.error("archive load failed", e); archivedRounds = []; render(); });
+        .catch(function(e){
+          console.error("archive load failed", e);
+          archiveLoadError = (e && (e.code || e.message)) ? ((e.code || "") + " " + (e.message || "")).trim() : String(e);
+          archivedRounds = [];
+          render();
+        });
     });
   }
 
@@ -1056,6 +1065,7 @@
         if(!state.snakeTieBreak) state.snakeTieBreak = {};
         if(state.snakeStake === undefined) state.snakeStake = 1;
         if(state.courseName === undefined) state.courseName = "";
+        if(!state.gamesEnabled) state.gamesEnabled = {wolf:true, snake:true, dots:true, nassau:false};
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
       } else {
         state = clone(defaultState);
@@ -1439,7 +1449,7 @@
     }
 
     var headerEl = document.getElementById("pageHeader");
-    var showHoleNav = (activeTab === "round") && ["score","wolf","snake","dots"].indexOf(activeSubTab) !== -1;
+    var showHoleNav = (activeTab === "round") && ["score","wolf","snake","dots","nassau"].indexOf(activeSubTab) !== -1;
     headerEl.className = showHoleNav ? "" : "compact";
     var roundLabelEl = document.getElementById("roundLabel");
     if(showHoleNav){
@@ -1490,11 +1500,13 @@
       if(activeSubTab === "setup") renderRoundSetup(main);
       else if(!haveNames()) renderNeedSetup(main);
       else {
+        if(activeSubTab !== "score" && !state.gamesEnabled[activeSubTab]) activeSubTab = "score";
         renderRoundOverview(main);
         if(activeSubTab === "score") renderScore(main);
         else if(activeSubTab === "wolf") renderWolf(main);
         else if(activeSubTab === "snake") renderSnake(main);
         else if(activeSubTab === "dots") renderDots(main);
+        else if(activeSubTab === "nassau") renderNassauPlaceholder(main);
       }
     }
   }
@@ -1504,7 +1516,9 @@
     if(activeTab !== "round"){ strip.innerHTML = ""; strip.style.display = "none"; return; }
     strip.style.display = "flex";
     strip.innerHTML = "";
-    [["setup","Setup"],["score","Score"],["wolf","Wolf"],["snake","Snake"],["dots","Dots"]].forEach(function(t){
+    var all = [["score","Score"],["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau"]];
+    all.forEach(function(t){
+      if(t[0] !== "score" && !state.gamesEnabled[t[0]]) return; // Score always shows; others only if enabled
       strip.appendChild(el("button", {
         class: activeSubTab === t[0] ? "active" : "",
         onclick: function(id){ return function(){ activeSubTab = id; render(); }; }(t[0])
@@ -1548,6 +1562,11 @@
       }
     }, ["Claim my past rounds"]));
     if(claimMessage){ card.appendChild(el("div", {class:"note"}, [claimMessage])); }
+    if(archiveLoadError){
+      card.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, [
+        "Couldn't load your rounds: " + archiveLoadError + ". This is usually a Firebase security rules mismatch — double-check the rules in your Firebase console match what was set up, and that you're signed in."
+      ]));
+    }
 
     if(archivedRounds === null){
       card.appendChild(el("div", {class:"note"}, ["Loading past rounds…"]));
@@ -1951,14 +1970,15 @@
       main.appendChild(sectionHead);
       archivedRounds.slice(0,3).forEach(function(entry){
         var row = el("div", {class:"card recent-round-row", onclick:function(){ viewArchivedRound(entry); }});
+        var ge = entry.gamesEnabled || {wolf:true, snake:true, dots:true};
+        var tagEls = [];
+        [["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau"]].forEach(function(g){
+          if(ge[g[0]]) tagEls.push(el("span", {class:"game-tag"}, [g[1]]));
+        });
         var left = el("div", {}, [
           el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.roundName || entry.date || "Unknown date"]),
           el("div", {class:"breakdown"}, [(entry.courseName ? entry.courseName + " · " : "") + (entry.players || []).length + " players"]),
-          el("div", {class:"game-tags"}, [
-            el("span", {class:"game-tag"}, ["Wolf"]),
-            el("span", {class:"game-tag"}, ["Snake"]),
-            el("span", {class:"game-tag"}, ["Dots"])
-          ])
+          el("div", {class:"game-tags"}, tagEls)
         ]);
         row.appendChild(left);
         row.appendChild(el("span", {class:"chev"}, ["›"]));
@@ -2161,6 +2181,20 @@
       value: state.roundName,
       oninput:function(e){ state.roundName = e.target.value; saveState(); }
     }));
+    card.appendChild(el("label", {class:"field-label"}, ["Games in play"]));
+    card.appendChild(el("div", {class:"note", style:"margin-top:0;"}, ["Mix and match — pick any combination for this round."]));
+    var gamesRow = el("div", {class:"choice-row"});
+    [["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau (coming soon)"]].forEach(function(g){
+      gamesRow.appendChild(el("button", {
+        class:"chip" + (state.gamesEnabled[g[0]] ? " selected":""),
+        onclick:function(key){ return function(){
+          state.gamesEnabled[key] = !state.gamesEnabled[key];
+          if(activeSubTab === key && !state.gamesEnabled[key]) activeSubTab = "score";
+          saveState(); render();
+        }; }(g[0])
+      }, [g[1]]));
+    });
+    card.appendChild(gamesRow);
     card.appendChild(el("div", {class:"eyebrow"}, ["Group size"]));
     var sizeRow = el("div", {class:"choice-row"});
     [2,3,4,5,6].forEach(function(n){
@@ -2318,6 +2352,15 @@
     else doReset();
   }
 
+  function renderNassauPlaceholder(main){
+    main.appendChild(el("div", {class:"card"}, [
+      el("div", {class:"empty"}, [
+        el("div", {class:"big"}, ["🚧"]),
+        el("div", {}, ["Nassau scoring isn't built yet — this is just a placeholder so it doesn't silently do nothing. Enable it in Setup marks it as \"in play\" for the round, but no front-9/back-9/overall bets are tracked here yet. Ask to have this built if you want it working."])
+      ])
+    ]));
+  }
+
   function renderRoundOverview(main){
     var names = activeNames();
     var holesRecorded = 0;
@@ -2332,9 +2375,9 @@
     head.appendChild(el("div", {class:"ro-title"}, [state.roundName.trim() || "This round"]));
     var tagsRow = el("div", {class:"ro-tags"});
     tagsRow.appendChild(el("span", {class:"ro-tag status"}, [(live ? "● In play" : "Not started")]));
-    tagsRow.appendChild(el("span", {class:"ro-tag"}, ["Wolf"]));
-    tagsRow.appendChild(el("span", {class:"ro-tag"}, ["Snake"]));
-    tagsRow.appendChild(el("span", {class:"ro-tag"}, ["Dots"]));
+    [["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau"]].forEach(function(g){
+      if(state.gamesEnabled[g[0]]) tagsRow.appendChild(el("span", {class:"ro-tag"}, [g[1]]));
+    });
     head.appendChild(tagsRow);
     var actionsRow = el("div", {class:"ro-actions"});
     actionsRow.appendChild(el("button", {
@@ -2353,9 +2396,9 @@
     head.appendChild(el("div", {class:"eyebrow"}, ["Active setup"]));
     head.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px; margin:2px 0 6px;"}, ["Stakes & course"]));
     var pillsRow = el("div", {class:"stakes-pills"});
-    pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Wolf " + state.wolfUnit + " pt"]));
-    pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Snake " + state.snakeStake + " pt"]));
-    pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Dots " + state.points.birdie + " pt birdie"]));
+    if(state.gamesEnabled.wolf) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Wolf " + state.wolfUnit + " pt"]));
+    if(state.gamesEnabled.snake) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Snake " + state.snakeStake + " pt"]));
+    if(state.gamesEnabled.dots) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Dots " + state.points.birdie + " pt birdie"]));
     if(state.dollarPerPoint > 0) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Base $" + state.dollarPerPoint.toFixed(2) + " / pt"]));
     head.appendChild(pillsRow);
 
@@ -3103,9 +3146,9 @@
 
   function renderSummary(main){
     var names = activeNames();
-    var wolfGross = computeWolfGrossWins();
-    var dotRes = computeDotTotals();
-    var holder = currentSnakeHolder();
+    var wolfGross = state.gamesEnabled.wolf ? computeWolfGrossWins() : new Array(state.activePlayers).fill(0);
+    var dotRes = state.gamesEnabled.dots ? computeDotTotals() : {totals: new Array(state.activePlayers).fill(0), counts: []};
+    var holder = state.gamesEnabled.snake ? currentSnakeHolder() : null;
     var n = state.activePlayers;
     var combined = computeCombinedDots(wolfGross, dotRes.totals, holder);
     var net = computeNetPositions(combined, n);
