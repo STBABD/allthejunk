@@ -994,14 +994,22 @@
   function loadArchivedRounds(){
     if(!SYNC_CONFIG){ archivedRounds = []; render(); return; }
     ensureSync(function(){
-      syncDb.ref("archive").limitToLast(30).once("value")
+      // NOTE: no .limitToLast()/.orderByChild() here on purpose — RTDB can't
+      // apply our per-child ownerUid security rule to an indexed/limited
+      // query (it needs to know which children are allowed *before* it can
+      // pick "the last 30", which the rule can't answer up front), so any
+      // query modifier here gets the whole read rejected with
+      // PERMISSION_DENIED even though the rule itself is correct. A plain
+      // read on the node lets RTDB cascade the rule per-child as expected;
+      // we just sort/trim client-side instead.
+      syncDb.ref("archive").once("value")
         .then(function(snap){
           var val = snap.val() || {};
           var list = Object.keys(val).map(function(k){
             var v = val[k]; v.id = k; return v;
           });
           list.sort(function(a,b){ return (b.updated||0) - (a.updated||0); });
-          archivedRounds = list;
+          archivedRounds = list.slice(0, 30);
           archiveLoadError = null;
           render();
         })
