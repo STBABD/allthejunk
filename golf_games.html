@@ -1960,14 +1960,19 @@
   function renderDashboard(main){
     renderDashboardHero(main);
 
-    if(SYNC_CONFIG && currentUser && archivedRounds && archivedRounds.length > 0){
+    if(SYNC_CONFIG && currentUser && archivedRounds !== null){
       var sectionHead = el("div", {class:"dash-section-head"});
       sectionHead.appendChild(el("h3", {}, ["Recent rounds"]));
       sectionHead.appendChild(el("span", {
         class:"tag", style:"cursor:pointer;",
         onclick:function(){ activeTab = "history"; render(); }
-      }, [archivedRounds.length + " in the ledger"]));
+      }, [archivedRounds.length + " in the ledger →"]));
       main.appendChild(sectionHead);
+      if(archivedRounds.length === 0){
+        main.appendChild(el("div", {class:"card", style:"cursor:pointer;", onclick:function(){ activeTab = "history"; render(); }}, [
+          el("div", {class:"note", style:"margin:0;"}, ["No rounds saved yet — tap here to check History."])
+        ]));
+      }
       archivedRounds.slice(0,3).forEach(function(entry){
         var row = el("div", {class:"card recent-round-row", onclick:function(){ viewArchivedRound(entry); }});
         var ge = entry.gamesEnabled || {wolf:true, snake:true, dots:true};
@@ -2337,15 +2342,18 @@
   // Resets the current round's scoring data. If archiveFirst is true and the
   // round has any recorded holes, it's saved to History first — used by
   // "Start new round", "Complete round", and (with archiveFirst=false) "Delete".
-  function startFreshRound(archiveFirst){
+  function startFreshRound(archiveFirst, goToDashboard){
     var hasData = false;
     for(var hh=1; hh<=18; hh++){ if(holeHasData(hh)){ hasData = true; break; } }
     function doReset(){
       var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
-          pts = state.points, wu = state.wolfUnit, ss = state.snakeStake, dpp = state.dollarPerPoint;
+          pts = state.points, wu = state.wolfUnit, ss = state.snakeStake, dpp = state.dollarPerPoint,
+          cn = state.courseName, ge = state.gamesEnabled;
       state = clone(defaultState);
       state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
       state.points = pts; state.wolfUnit = wu; state.snakeStake = ss; state.dollarPerPoint = dpp;
+      state.courseName = cn; state.gamesEnabled = ge;
+      if(goToDashboard){ activeTab = "dashboard"; activeSubTab = "setup"; }
       saveState(); render();
     }
     if(archiveFirst && hasData) archiveRound(doReset);
@@ -2387,7 +2395,7 @@
       class:"danger",
       onclick:function(){
         if(confirm("Delete this round? Scores, wolf, snake, and dots for the current round will be cleared without saving to History.")){
-          startFreshRound(false);
+          startFreshRound(false, true);
         }
       }
     }, ["🗑 Delete"]));
@@ -2420,7 +2428,7 @@
     hbh.appendChild(el("button", {
       onclick:function(){
         if(confirm("Complete this round? It'll be saved to History and a fresh round started.")){
-          startFreshRound(true);
+          startFreshRound(true, true);
         }
       }
     }, ["🏆 Complete round"]));
