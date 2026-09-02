@@ -155,30 +155,59 @@
   }
 
   /* dashboard hero (top of Setup) */
-  .hero{
-    background:var(--fairway);
-    color:var(--paper);
-    border-radius:var(--radius);
-    padding:20px;
-    margin-bottom:14px;
+  .dash-greeting{ margin-bottom:16px; }
+  .dash-greeting .eyebrow{ margin:0 0 4px; }
+  .dash-greeting h2{
+    font-family:'Fraunces',serif; font-weight:700; font-size:24px; color:var(--ink);
+    margin:0 0 14px; line-height:1.25; max-width:20ch;
   }
-  .hero h2{
-    font-family:'Fraunces',serif; font-weight:600; font-size:19px;
-    margin:6px 0 14px; line-height:1.3; max-width:26ch;
+  .stat-big{
+    background:var(--fairway); color:var(--paper);
+    border-radius:var(--radius); padding:16px 18px; margin-bottom:10px;
   }
-  .hero .stat-row{ display:flex; gap:10px; margin-bottom:14px; }
-  .hero .stat{
-    flex:1; background:rgba(255,255,255,0.07); border-radius:10px; padding:10px 12px;
+  .stat-big .l{ font-family:'Space Mono',monospace; font-size:10px; letter-spacing:0.5px; opacity:0.8; text-transform:uppercase; }
+  .stat-big .n{ font-family:'Fraunces',serif; font-weight:700; font-size:30px; margin-top:4px; }
+  .stat-row-light{ display:flex; gap:10px; margin-bottom:16px; }
+  .stat-light{
+    flex:1; background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px;
   }
-  .hero .stat .n{ font-family:'Space Mono',monospace; font-weight:700; font-size:20px; }
-  .hero .stat .l{ font-family:'Space Mono',monospace; font-size:9px; letter-spacing:0.4px; opacity:0.75; text-transform:uppercase; margin-top:2px; }
+  .stat-light .l{ font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:0.4px; color:var(--ink-soft); text-transform:uppercase; }
+  .stat-light .n{ font-family:'Fraunces',serif; font-weight:700; font-size:22px; color:var(--ink); margin-top:2px; }
+  .dash-section-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    margin:18px 0 10px;
+  }
+  .dash-section-head h3{ font-family:'Fraunces',serif; font-weight:700; font-size:19px; color:var(--ink); margin:0; }
+  .dash-section-head .tag{ font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:0.4px; color:var(--ink-soft); text-transform:uppercase; }
   .active-round-card{
     background:var(--turf);
-    border-radius:12px; padding:14px 16px;
+    border-radius:14px; padding:18px; position:relative; overflow:hidden;
   }
-  .active-round-card .name{ font-family:'Fraunces',serif; font-weight:700; font-size:17px; }
-  .active-round-card .meta{ font-family:'Space Mono',monospace; font-size:10.5px; opacity:0.85; margin-top:2px; }
-  .avatar-row{ display:flex; gap:6px; margin:10px 0; }
+  .active-round-card .course-eyebrow{ font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:0.5px; color:var(--gold-soft); text-transform:uppercase; opacity:0.9; }
+  .active-round-card .name{ font-family:'Fraunces',serif; font-weight:700; font-size:22px; color:#fff; margin-top:4px; }
+  .active-round-card .hole-display{ display:flex; align-items:baseline; gap:8px; margin-top:14px; }
+  .active-round-card .hole-display .big-num{ font-family:'Fraunces',serif; font-weight:700; font-size:38px; color:var(--gold); line-height:1; }
+  .active-round-card .hole-display .lbl{ font-family:'Space Mono',monospace; font-size:10px; color:rgba(255,255,255,0.7); text-transform:uppercase; }
+  .ar-row{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; }
+  .ar-row .l{ font-family:'Inter',sans-serif; font-size:12.5px; color:rgba(255,255,255,0.85); }
+  .ar-row .v{ font-family:'Space Mono',monospace; font-weight:700; font-size:12.5px; color:#fff; }
+  .active-round-card .continue-btn{
+    width:100%; margin-top:14px; padding:13px;
+    background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.25);
+    border-radius:10px; color:#fff; font-weight:700; font-size:14px; cursor:pointer;
+  }
+  .recent-round-row{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    cursor:pointer;
+  }
+  .recent-round-row .game-tags{ margin-top:6px; display:flex; gap:5px; }
+  .recent-round-row .game-tag{
+    font-family:'Space Mono',monospace; font-size:8.5px; letter-spacing:0.3px;
+    background:var(--paper-2); color:var(--ink-soft); padding:2px 7px; border-radius:999px; text-transform:uppercase;
+  }
+  .recent-round-row .chev{ color:var(--ink-soft); font-size:18px; flex-shrink:0; }
+
+  .avatar-row{ display:flex; gap:6px; }
   .avatar{
     width:26px; height:26px; border-radius:50%;
     display:flex; align-items:center; justify-content:center;
@@ -187,7 +216,7 @@
   }
   .progress-track{
     height:6px; border-radius:999px; background:rgba(255,255,255,0.2);
-    margin:10px 0; overflow:hidden;
+    margin:6px 0 0; overflow:hidden;
   }
   .progress-fill{ height:100%; background:var(--gold); border-radius:999px; }
   .status-badge{
@@ -196,6 +225,126 @@
   }
   .status-badge.live{ background:var(--gold); color:var(--fairway); }
   .status-badge.idle{ background:rgba(255,255,255,0.15); color:var(--paper); }
+
+  /* "Now recording" header used on Score/Wolf/Snake/Dots */
+  .now-recording{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    margin-bottom:14px;
+  }
+  .now-recording h2{
+    font-family:'Fraunces',serif; font-weight:700; font-size:22px; color:var(--ink);
+    margin:2px 0 0;
+  }
+  .recorded-badge{
+    font-family:'Space Mono',monospace; font-size:10px; font-weight:700; letter-spacing:0.3px;
+    padding:5px 10px; border-radius:999px; text-transform:uppercase; flex-shrink:0;
+  }
+  .recorded-badge.yes{ background:var(--gold-soft); color:#6b551f; }
+  .recorded-badge.no{ background:var(--paper-2); color:var(--ink-soft); }
+
+  /* Score entry: 2-column grid of big touch-friendly player cards */
+  .score-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .score-card{
+    background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px;
+  }
+  .score-card .who{ display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+  .score-card .who .nm{ font-weight:700; font-size:13.5px; flex:1; }
+  .score-card .who .lbl{ font-family:'Space Mono',monospace; font-size:9px; color:var(--ink-soft); text-transform:uppercase; }
+  .big-num-input{
+    width:100%; padding:12px; border-radius:10px; border:1.5px solid var(--line);
+    background:var(--paper); font-family:'Space Mono',monospace; font-weight:700; font-size:22px;
+    text-align:center; margin-bottom:8px;
+  }
+  .score-card .putts-label{
+    font-family:'Space Mono',monospace; font-size:9px; color:var(--ink-soft); text-transform:uppercase;
+    margin-bottom:4px; display:block;
+  }
+  .score-card .card-breakdown{
+    font-family:'Space Mono',monospace; font-size:9.5px; color:var(--ink-soft); margin-top:6px;
+  }
+
+  /* ---------- Round overview (shown above Score/Wolf/Snake/Dots) ---------- */
+  .ro-eyebrow{ font-family:'Space Mono',monospace; font-size:10px; letter-spacing:0.4px; color:var(--ink-soft); text-transform:uppercase; }
+  .ro-title{ font-family:'Fraunces',serif; font-weight:700; font-size:24px; color:var(--ink); margin:4px 0 10px; }
+  .ro-tags{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+  .ro-tag{
+    font-family:'Space Mono',monospace; font-size:9.5px; letter-spacing:0.3px; text-transform:uppercase;
+    padding:4px 10px; border-radius:999px; background:var(--paper-2); color:var(--ink-soft);
+  }
+  .ro-tag.status{ background:var(--gold-soft); color:#6b551f; font-weight:700; }
+  .ro-actions{ display:flex; gap:8px; margin-bottom:14px; }
+  .ro-actions button{
+    flex:1; padding:11px; border-radius:10px; border:1px solid var(--line);
+    background:var(--paper-2); color:var(--ink); font-weight:600; font-size:13px; cursor:pointer;
+  }
+  .ro-actions button.danger{ background:#f5e3df; color:var(--flag); border-color:#e8c9c2; }
+  .stakes-pills{ display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .stakes-pill{
+    font-family:'Space Mono',monospace; font-size:11px; font-weight:700;
+    padding:6px 11px; border-radius:8px; background:var(--paper-2); border:1px solid var(--line); color:var(--ink);
+  }
+  .par-grid{
+    display:grid; grid-template-columns:repeat(9, 1fr); gap:4px; margin-top:10px;
+  }
+  .par-grid .cell{
+    text-align:center; padding:5px 0 4px; border-radius:7px;
+    background:var(--paper-2); border:1px solid var(--line);
+  }
+  .par-grid .cell.cur{ background:var(--gold); border-color:var(--gold); }
+  .par-grid .cell .n{ font-family:'Space Mono',monospace; font-weight:700; font-size:10.5px; color:var(--ink-soft); }
+  .par-grid .cell.cur .n{ color:var(--fairway); }
+  .par-grid .cell .p{ font-family:'Space Mono',monospace; font-weight:700; font-size:12px; color:var(--ink); }
+  .hbh-card{
+    background:var(--turf); color:#fff; border-radius:14px; padding:18px; margin:14px 0;
+  }
+  .hbh-card .eyebrow{ color:rgba(255,255,255,0.75); }
+  .hbh-card h3{ font-family:'Fraunces',serif; font-weight:700; font-size:22px; margin:6px 0 8px; }
+  .hbh-card .status-line{ font-family:'Space Mono',monospace; font-size:11px; color:rgba(255,255,255,0.85); margin-bottom:14px; }
+  .hbh-card button{
+    width:100%; padding:13px; border-radius:10px; border:none;
+    background:var(--gold); color:var(--fairway); font-weight:700; font-size:14px; cursor:pointer;
+  }
+
+  /* Round Setup status header: stakes chips, hole-par preview grid */
+  .stakes-chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .stakes-chip{
+    background:var(--paper); border:1px solid var(--line); border-radius:8px;
+    padding:6px 10px; font-family:'Space Mono',monospace; font-size:11px; font-weight:700; color:var(--ink);
+  }
+  .par-preview-grid{
+    display:grid; grid-template-columns:repeat(9, 1fr); gap:4px; margin-top:10px;
+  }
+  .par-preview-grid .ph{
+    text-align:center; padding:5px 0 4px; border-radius:7px; background:var(--paper);
+  }
+  .par-preview-grid .ph.cur{ background:var(--gold-soft); }
+  .par-preview-grid .ph .n{ font-family:'Space Mono',monospace; font-size:9px; color:var(--ink-soft); }
+  .par-preview-grid .ph .p{ font-family:'Space Mono',monospace; font-weight:700; font-size:12px; }
+
+  /* Ledger: avatar rows, payout arrows, point breakdown table */
+  .ledger-row{ display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--line); }
+  .ledger-row:last-child{ border-bottom:none; }
+  .ledger-row .nm{ flex:1; font-weight:700; font-size:14.5px; }
+  .ledger-row .amt{ font-family:'Space Mono',monospace; font-weight:700; font-size:14.5px; }
+  .amt.pos{ color:var(--turf); } .amt.neg{ color:var(--flag); } .amt.zero{ color:var(--ink-soft); }
+  .payout-arrow-row{
+    display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px dotted var(--line);
+    font-size:13px;
+  }
+  .payout-arrow-row .arw{ color:var(--ink-soft); }
+  .payout-arrow-row .amt{ margin-left:auto; font-family:'Space Mono',monospace; font-weight:700; }
+  .pb-table{ width:100%; border-collapse:collapse; margin-top:6px; }
+  .pb-table th{ font-family:'Space Mono',monospace; font-size:9.5px; text-transform:uppercase; color:var(--ink-soft); text-align:center; padding-bottom:6px; }
+  .pb-table th:first-child{ text-align:left; }
+  .pb-table td{ text-align:center; padding:6px 0; border-top:1px dotted var(--line); font-family:'Space Mono',monospace; font-size:12.5px; }
+  .pb-table td:first-child{ text-align:left; font-family:'Inter',sans-serif; font-weight:600; }
+  .info-box-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--paper); border-radius:10px; padding:11px 14px; margin-top:8px;
+  }
+  .info-box-row .l{ font-size:13px; color:var(--ink); }
+  .info-box-row .v{ font-family:'Space Mono',monospace; font-weight:700; font-size:13px; }
+
 
   /* ---------- Sub-tabs (inside the Round section) ---------- */
   .subtabs{
@@ -562,6 +711,7 @@
     activePlayers: 5,
     currentHole: 1,
     roundName: "",
+    courseName: "",
     holePar: {},               // hole -> 3/4/5
     holeHcp: {},                // hole -> stroke index 1-18
     wolf: {},                   // hole -> {wolf:idx, partners:[idx,...], result:'wolfwin'|'oppwin'|'push', manual:bool}
@@ -793,6 +943,7 @@
     if(!state.putts) state.putts = {};
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
     if(state.snakeStake === undefined) state.snakeStake = 1;
+        if(state.courseName === undefined) state.courseName = "";
   }
 
   // ---------------- ROUND HISTORY (cross-device archive) ----------------
@@ -821,6 +972,7 @@
       date: new Date().toLocaleDateString(),
       updated: Date.now(),
       roundName: state.roundName.trim(),
+      courseName: state.courseName.trim(),
       players: state.players.slice(0, state.activePlayers),
       ownerUid: currentUser.uid,
       state: JSON.stringify(state)
@@ -903,6 +1055,7 @@
         if(!state.putts) state.putts = {};
         if(!state.snakeTieBreak) state.snakeTieBreak = {};
         if(state.snakeStake === undefined) state.snakeStake = 1;
+        if(state.courseName === undefined) state.courseName = "";
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
       } else {
         state = clone(defaultState);
@@ -1336,10 +1489,13 @@
     else if(activeTab === "round"){
       if(activeSubTab === "setup") renderRoundSetup(main);
       else if(!haveNames()) renderNeedSetup(main);
-      else if(activeSubTab === "score") renderScore(main);
-      else if(activeSubTab === "wolf") renderWolf(main);
-      else if(activeSubTab === "snake") renderSnake(main);
-      else if(activeSubTab === "dots") renderDots(main);
+      else {
+        renderRoundOverview(main);
+        if(activeSubTab === "score") renderScore(main);
+        else if(activeSubTab === "wolf") renderWolf(main);
+        else if(activeSubTab === "snake") renderSnake(main);
+        else if(activeSubTab === "dots") renderDots(main);
+      }
     }
   }
 
@@ -1506,7 +1662,7 @@
     return out;
   }
 
-  function loadCourse(courseId){
+  function loadCourse(courseId, courseName){
     courseLoadStatus = "loading"; courseLoadDebug = null; render();
     fetch(OPENGOLF_BASE + "/courses/" + courseId)
       .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -1518,6 +1674,7 @@
           render();
           return;
         }
+        if(courseName && !state.courseName.trim()) state.courseName = courseName;
         var parCount = 0, hcpCount = 0;
         Object.keys(holes).forEach(function(num){
           state.holePar[num] = holes[num].par;
@@ -1539,64 +1696,93 @@
       });
   }
 
-  function renderDashboardHero(){
-    var hero = el("div", {class:"hero"});
-    hero.appendChild(el("div", {class:"eyebrow", style:"color:var(--gold-soft); margin:0; opacity:0.8;"}, ["CLUBHOUSE LEDGER"]));
-    hero.appendChild(el("h2", {}, ["Play the round. We'll settle who owes who."]));
+  function greeting(){
+    var hr = new Date().getHours();
+    var word = hr < 12 ? "Good morning" : hr < 17 ? "Good afternoon" : "Good evening";
+    return word + ", Captain";
+  }
+
+  function renderDashboardHero(main){
+    var greetBlock = el("div", {class:"dash-greeting"});
+    greetBlock.appendChild(el("div", {class:"eyebrow"}, [greeting().toUpperCase()]));
+    greetBlock.appendChild(el("h2", {}, ["Keep the math off the course."]));
+    greetBlock.appendChild(el("button", {
+      class:"primary", style:"background:var(--gold); color:var(--fairway); width:auto; padding:12px 20px; margin:0;",
+      onclick:function(){
+        if(haveNames()){
+          var hasData = false;
+          for(var hh=1; hh<=18; hh++){ if(holeHasData(hh)){ hasData = true; break; } }
+          if(hasData && confirm("Start a new round? This archives your current round to History and clears scores, wolf, snake, and dots.")){
+            archiveRound(function(){ activeTab = "round"; activeSubTab = "setup"; render(); });
+            return;
+          }
+        }
+        activeTab = "round"; activeSubTab = "setup"; render();
+      }
+    }, ["+ Start a round"]));
+    main.appendChild(greetBlock);
 
     var holesRecorded = 0;
     for(var h=1; h<=18; h++){ if(holeHasData(h)) holesRecorded++; }
+    var onCourse = (haveNames() && holesRecorded > 0) ? 1 : 0;
 
     if(SYNC_CONFIG && currentUser){
-      if(archivedRounds === null) loadArchivedRounds();
-      var statRow = el("div", {class:"stat-row"});
-      statRow.appendChild(el("div", {class:"stat"}, [
-        el("div", {class:"n"}, [archivedRounds === null ? "…" : String(archivedRounds.length)]),
-        el("div", {class:"l"}, ["Rounds saved"])
+      if(archivedRounds === null){ loadArchivedRounds(); return; }
+      var bigStat = el("div", {class:"stat-big"});
+      bigStat.appendChild(el("div", {class:"l"}, ["Rounds tracked"]));
+      bigStat.appendChild(el("div", {class:"n"}, [String(archivedRounds.length)]));
+      main.appendChild(bigStat);
+
+      var lightRow = el("div", {class:"stat-row-light"});
+      lightRow.appendChild(el("div", {class:"stat-light"}, [
+        el("div", {class:"l"}, ["On the course"]),
+        el("div", {class:"n"}, [String(onCourse)])
       ]));
-      statRow.appendChild(el("div", {class:"stat"}, [
-        el("div", {class:"n"}, [String(holesRecorded)]),
-        el("div", {class:"l"}, ["Holes recorded"])
+      lightRow.appendChild(el("div", {class:"stat-light"}, [
+        el("div", {class:"l"}, ["Holes recorded"]),
+        el("div", {class:"n"}, [String(holesRecorded)])
       ]));
-      hero.appendChild(statRow);
+      main.appendChild(lightRow);
     }
 
     if(haveNames()){
       var names = activeNames();
       var live = holesRecorded > 0;
-      var card = el("div", {class:"active-round-card"});
-      var topRow = el("div", {style:"display:flex; justify-content:space-between; align-items:flex-start;"});
-      topRow.appendChild(el("div", {}, [
-        el("div", {class:"name"}, [state.roundName.trim() || "This round"]),
-        el("div", {class:"meta"}, ["Hole " + state.currentHole + " of 18 · " + state.activePlayers + " players"])
-      ]));
-      topRow.appendChild(el("span", {class:"status-badge " + (live ? "live" : "idle")}, [live ? "In play" : "Not started"]));
-      card.appendChild(topRow);
 
+      var sectionHead = el("div", {class:"dash-section-head"});
+      sectionHead.appendChild(el("h3", {}, ["Back on the fairway"]));
+      sectionHead.appendChild(el("span", {class:"tag"}, [live ? "Active round" : "Ready to start"]));
+      main.appendChild(sectionHead);
+
+      var card = el("div", {class:"active-round-card"});
+      card.appendChild(el("div", {class:"course-eyebrow"}, [state.courseName.trim() || "Course not set"]));
+      card.appendChild(el("div", {class:"name"}, [state.roundName.trim() || "This round"]));
+      card.appendChild(el("div", {class:"hole-display"}, [
+        el("span", {class:"big-num"}, [String(state.currentHole)]),
+        el("span", {class:"lbl"}, ["of 18 · hole"])
+      ]));
+
+      var playersRow = el("div", {class:"ar-row"});
+      playersRow.appendChild(el("span", {class:"l"}, ["Players in the book"]));
       var avRow = el("div", {class:"avatar-row"});
       names.forEach(function(nm, i){ avRow.appendChild(avatarChip(i, names)); });
-      card.appendChild(avRow);
+      playersRow.appendChild(avRow);
+      card.appendChild(playersRow);
 
+      var progRow = el("div", {class:"ar-row"});
+      progRow.appendChild(el("span", {class:"l"}, ["Round progress"]));
+      progRow.appendChild(el("span", {class:"v"}, [holesRecorded + "/18"]));
+      card.appendChild(progRow);
       card.appendChild(el("div", {class:"progress-track"}, [
         el("div", {class:"progress-fill", style:"width:" + Math.round(holesRecorded/18*100) + "%;"})
       ]));
 
       card.appendChild(el("button", {
-        class:"primary", style:"background:var(--gold); color:var(--fairway); margin-top:4px;",
+        class:"continue-btn",
         onclick:function(){ activeTab = "round"; activeSubTab = "score"; render(); }
-      }, [live ? "Continue scoring →" : "Start scoring →"]));
-      hero.appendChild(card);
-    } else {
-      var newCard = el("div", {class:"active-round-card", style:"text-align:center;"});
-      newCard.appendChild(el("div", {class:"name"}, ["No round set up yet"]));
-      newCard.appendChild(el("button", {
-        class:"primary", style:"background:var(--gold); color:var(--fairway); margin-top:10px;",
-        onclick:function(){ activeTab = "round"; activeSubTab = "setup"; render(); }
-      }, ["+ New round"]));
-      hero.appendChild(newCard);
+      }, [live ? "Continue scorecard →" : "Start scoring →"]));
+      main.appendChild(card);
     }
-
-    return hero;
   }
 
   function handleScorecardFile(file){
@@ -1753,28 +1939,31 @@
   }
 
   function renderDashboard(main){
-    main.appendChild(renderDashboardHero());
+    renderDashboardHero(main);
 
-    if(SYNC_CONFIG && currentUser){
-      if(archivedRounds === null){ loadArchivedRounds(); return; }
-      if(archivedRounds.length > 0){
-        var recentCard = el("div", {class:"card"});
-        var headRow = el("div", {style:"display:flex; justify-content:space-between; align-items:center;"});
-        headRow.appendChild(el("h2", {style:"margin:0;"}, ["Recent rounds"]));
-        headRow.appendChild(el("button", {
-          class:"ghost", style:"margin:0; width:auto; padding:6px 12px; font-size:12px;",
-          onclick:function(){ activeTab = "history"; render(); }
-        }, ["View all"]));
-        recentCard.appendChild(headRow);
-        main.appendChild(recentCard);
-        archivedRounds.slice(0,3).forEach(function(entry){
-          var row = el("div", {class:"card", style:"cursor:pointer;", onclick:function(){ viewArchivedRound(entry); }});
-          row.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.roundName || entry.date || "Unknown date"]));
-          if(entry.roundName) row.appendChild(el("div", {class:"eyebrow", style:"margin:2px 0 0;"}, [entry.date]));
-          row.appendChild(el("div", {class:"breakdown"}, [(entry.players || []).join(", ")]));
-          main.appendChild(row);
-        });
-      }
+    if(SYNC_CONFIG && currentUser && archivedRounds && archivedRounds.length > 0){
+      var sectionHead = el("div", {class:"dash-section-head"});
+      sectionHead.appendChild(el("h3", {}, ["Recent rounds"]));
+      sectionHead.appendChild(el("span", {
+        class:"tag", style:"cursor:pointer;",
+        onclick:function(){ activeTab = "history"; render(); }
+      }, [archivedRounds.length + " in the ledger"]));
+      main.appendChild(sectionHead);
+      archivedRounds.slice(0,3).forEach(function(entry){
+        var row = el("div", {class:"card recent-round-row", onclick:function(){ viewArchivedRound(entry); }});
+        var left = el("div", {}, [
+          el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px;"}, [entry.roundName || entry.date || "Unknown date"]),
+          el("div", {class:"breakdown"}, [(entry.courseName ? entry.courseName + " · " : "") + (entry.players || []).length + " players"]),
+          el("div", {class:"game-tags"}, [
+            el("span", {class:"game-tag"}, ["Wolf"]),
+            el("span", {class:"game-tag"}, ["Snake"]),
+            el("span", {class:"game-tag"}, ["Dots"])
+          ])
+        ]);
+        row.appendChild(left);
+        row.appendChild(el("span", {class:"chev"}, ["›"]));
+        main.appendChild(row);
+      });
     }
   }
 
@@ -1833,7 +2022,7 @@
       courseSearchResults.slice(0,8).forEach(function(c){
         var row = el("div", {
           style:"padding:10px 0; border-bottom:1px dotted var(--line); cursor:pointer;",
-          onclick:function(){ loadCourse(c.id); }
+          onclick:function(){ loadCourse(c.id, c.course_name || c.name); }
         });
         row.appendChild(el("div", {style:"font-weight:600; font-size:13.5px;"}, [c.course_name || c.name]));
         row.appendChild(el("div", {class:"breakdown"}, [[c.city, c.state].filter(Boolean).join(", ") + (c.par ? " · Par " + c.par : "")]));
@@ -1960,6 +2149,12 @@
 
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Who's playing"]));
+    card.appendChild(el("label", {class:"field-label"}, ["Course name (optional)"]));
+    card.appendChild(el("input", {
+      class:"name-input", type:"text", placeholder:"e.g. Costa Mesa CC (Los Lagos)",
+      value: state.courseName,
+      oninput:function(e){ state.courseName = e.target.value; saveState(); }
+    }));
     card.appendChild(el("label", {class:"field-label"}, ["Round name (optional)"]));
     card.appendChild(el("input", {
       class:"name-input", type:"text", placeholder:"e.g. Saturday skins",
@@ -2098,22 +2293,95 @@
       class:"ghost",
       onclick:function(){
         if(confirm("Start a new round? This clears all scores, wolf, snake, and dots for the current round.")){
-          var hasData = false;
-          for(var hh=1; hh<=18; hh++){ if(holeHasData(hh)){ hasData = true; break; } }
-          function doReset(){
-            var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
-                pts = state.points, wu = state.wolfUnit, ss = state.snakeStake, dpp = state.dollarPerPoint;
-            state = clone(defaultState);
-            state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
-            state.points = pts; state.wolfUnit = wu; state.snakeStake = ss; state.dollarPerPoint = dpp;
-            saveState(); render();
-          }
-          if(hasData) archiveRound(doReset);
-          else doReset();
+          startFreshRound(true);
         }
       }
     }, ["Start new round (keep players, handicaps & settings)"]));
     main.appendChild(reset);
+  }
+
+  // Resets the current round's scoring data. If archiveFirst is true and the
+  // round has any recorded holes, it's saved to History first — used by
+  // "Start new round", "Complete round", and (with archiveFirst=false) "Delete".
+  function startFreshRound(archiveFirst){
+    var hasData = false;
+    for(var hh=1; hh<=18; hh++){ if(holeHasData(hh)){ hasData = true; break; } }
+    function doReset(){
+      var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
+          pts = state.points, wu = state.wolfUnit, ss = state.snakeStake, dpp = state.dollarPerPoint;
+      state = clone(defaultState);
+      state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
+      state.points = pts; state.wolfUnit = wu; state.snakeStake = ss; state.dollarPerPoint = dpp;
+      saveState(); render();
+    }
+    if(archiveFirst && hasData) archiveRound(doReset);
+    else doReset();
+  }
+
+  function renderRoundOverview(main){
+    var names = activeNames();
+    var holesRecorded = 0;
+    for(var h=1; h<=18; h++){ if(holeHasData(h)) holesRecorded++; }
+    var live = holesRecorded > 0;
+    var par = state.holePar[state.currentHole] || 4;
+
+    var head = el("div", {class:"card"});
+    head.appendChild(el("div", {class:"ro-eyebrow"}, [
+      (state.courseName.trim() || "Course not set") + " · " + new Date().toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"})
+    ]));
+    head.appendChild(el("div", {class:"ro-title"}, [state.roundName.trim() || "This round"]));
+    var tagsRow = el("div", {class:"ro-tags"});
+    tagsRow.appendChild(el("span", {class:"ro-tag status"}, [(live ? "● In play" : "Not started")]));
+    tagsRow.appendChild(el("span", {class:"ro-tag"}, ["Wolf"]));
+    tagsRow.appendChild(el("span", {class:"ro-tag"}, ["Snake"]));
+    tagsRow.appendChild(el("span", {class:"ro-tag"}, ["Dots"]));
+    head.appendChild(tagsRow);
+    var actionsRow = el("div", {class:"ro-actions"});
+    actionsRow.appendChild(el("button", {
+      onclick:function(){ activeSubTab = "setup"; render(); }
+    }, ["✎ Edit"]));
+    actionsRow.appendChild(el("button", {
+      class:"danger",
+      onclick:function(){
+        if(confirm("Delete this round? Scores, wolf, snake, and dots for the current round will be cleared without saving to History.")){
+          startFreshRound(false);
+        }
+      }
+    }, ["🗑 Delete"]));
+    head.appendChild(actionsRow);
+
+    head.appendChild(el("div", {class:"eyebrow"}, ["Active setup"]));
+    head.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px; margin:2px 0 6px;"}, ["Stakes & course"]));
+    var pillsRow = el("div", {class:"stakes-pills"});
+    pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Wolf " + state.wolfUnit + " pt"]));
+    pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Snake " + state.snakeStake + " pt"]));
+    pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Dots " + state.points.birdie + " pt birdie"]));
+    if(state.dollarPerPoint > 0) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Base $" + state.dollarPerPoint.toFixed(2) + " / pt"]));
+    head.appendChild(pillsRow);
+
+    head.appendChild(el("div", {class:"eyebrow", style:"margin-top:14px;"}, ["Hole pars"]));
+    var pg = el("div", {class:"par-grid"});
+    for(var ph=1; ph<=18; ph++){
+      pg.appendChild(el("div", {class:"cell" + (ph===state.currentHole?" cur":"")}, [
+        el("div", {class:"n"}, [String(ph)]),
+        el("div", {class:"p"}, [String(state.holePar[ph] || 4)])
+      ]));
+    }
+    head.appendChild(pg);
+    main.appendChild(head);
+
+    var hbh = el("div", {class:"hbh-card"});
+    hbh.appendChild(el("div", {class:"eyebrow"}, ["Hole by hole"]));
+    hbh.appendChild(el("h3", {}, ["Keep it honest."]));
+    hbh.appendChild(el("div", {class:"status-line"}, [holesRecorded + " of 18 holes recorded · Hole " + state.currentHole + " par " + par]));
+    hbh.appendChild(el("button", {
+      onclick:function(){
+        if(confirm("Complete this round? It'll be saved to History and a fresh round started.")){
+          startFreshRound(true);
+        }
+      }
+    }, ["🏆 Complete round"]));
+    main.appendChild(hbh);
   }
 
   function renderScore(main){
@@ -2128,20 +2396,22 @@
     var holeScores = state.scores[hole];
     var holePutts = state.putts[hole];
 
-    var card = el("div", {class:"card"});
-    card.appendChild(el("h2", {}, ["# Hole " + hole + " — score & putts  ·  Par " + par]));
-    var headRow = el("div", {style:"display:flex; align-items:center; gap:8px; margin-bottom:2px;"});
-    headRow.appendChild(el("div", {style:"flex:1;"}));
-    headRow.appendChild(el("div", {class:"eyebrow", style:"width:62px; text-align:center; margin:0;"}, ["Gross"]));
-    headRow.appendChild(el("div", {class:"eyebrow", style:"width:62px; text-align:center; margin:0;"}, ["Putts"]));
-    card.appendChild(headRow);
+    var nr = el("div", {class:"now-recording"});
+    nr.appendChild(el("div", {}, [
+      el("div", {class:"eyebrow", style:"margin:0;"}, ["Now recording · Par " + par]),
+      el("h2", {}, ["Hole " + hole])
+    ]));
+    nr.appendChild(el("span", {class:"recorded-badge " + (holeHasData(hole) ? "yes" : "no")}, [holeHasData(hole) ? "✓ Recorded" : "Not yet"]));
+    main.appendChild(nr);
+
+    var grid = el("div", {class:"score-grid"});
     for(var i=0;i<n;i++){
       (function(pi){
         var s = strokesFor(pi, hole);
         var g = grossFor(pi, hole);
         var p = puttsFor(pi, hole);
         var thresh = puttThreshold(pi);
-        var breakdown = el("div", {class:"breakdown"});
+        var breakdown = el("div", {class:"card-breakdown"});
         function breakdownText(){
           var net = netFor(pi, hole);
           return (s > 0 ? ("+" + s + " stroke  ·  ") : "") +
@@ -2149,18 +2419,18 @@
             (thresh > 3 ? ("  ·  " + thresh + "-putt rule") : "");
         }
         breakdown.textContent = breakdownText();
-        var row = el("div", {class:"player-row"});
-        row.appendChild(el("div", {class:"swatch", style:"background:"+SWATCHES[pi]}));
-        var label = el("div", {style:"flex:1;"}, [
-          el("div", {style:"font-weight:600; font-size:14px;"}, [names[pi]]),
-          breakdown
-        ]);
-        row.appendChild(label);
+
+        var card = el("div", {class:"score-card"});
+        card.appendChild(el("div", {class:"who"}, [
+          avatarChip(pi, names),
+          el("span", {class:"nm"}, [names[pi]]),
+          el("span", {class:"lbl"}, ["Strokes"])
+        ]));
         // no render() from these handlers — rebuilding the DOM would destroy
         // the focused input and close the phone keyboard on every keystroke;
         // only the net label depends on the value, so update it in place
-        row.appendChild(el("input", {
-          class:"hcp-input", type:"number", placeholder:"—", min:"1", max:"15",
+        card.appendChild(el("input", {
+          class:"big-num-input", type:"number", placeholder:"—", min:"1", max:"15",
           value: g === null ? "" : g,
           oninput: function(e){
             var v = e.target.value;
@@ -2170,8 +2440,9 @@
             saveState();
           }
         }));
-        row.appendChild(el("input", {
-          class:"hcp-input", type:"number", placeholder:"—", min:"1", max:"10",
+        card.appendChild(el("span", {class:"putts-label"}, ["Putts"]));
+        card.appendChild(el("input", {
+          class:"big-num-input", type:"number", placeholder:"—", min:"1", max:"10",
           value: p === null ? "" : p,
           oninput: function(e){
             var v = e.target.value;
@@ -2180,13 +2451,21 @@
             saveState();
           }
         }));
-        card.appendChild(row);
+        card.appendChild(breakdown);
+        grid.appendChild(card);
       })(i);
     }
-    card.appendChild(el("div", {class:"note"}, [
+    main.appendChild(grid);
+
+    main.appendChild(el("div", {class:"note", style:"margin-top:10px;"}, ["Change the numbers any time — they save automatically."]));
+    main.appendChild(el("button", {
+      class:"primary", style:"margin-top:6px;",
+      onclick:function(){ render(); }
+    }, ["✓ Update hole"]));
+
+    main.appendChild(el("div", {class:"note", style:"margin-top:12px;"}, [
       "Net score = gross − strokes received. Wolf auto-suggests a winner from net scores. Putts feed Snake and the 3-Putt dot automatically — each player's putt threshold is set in Setup."
     ]));
-    main.appendChild(card);
   }
 
   function renderWolf(main){
@@ -2768,7 +3047,17 @@
   // own total can never go negative just from holding the snake. Payout
   // rule: whoever has fewer total dots owes the exact difference to
   // whoever has more — pairwise, for every pair, not just neighbors in rank.
-  function renderPayouts(main, names, wolfGross, dotsGross, snakeHolder){
+  // Net cash position per player, derived FROM our existing gross-wins +
+  // pairwise-differential Payouts model (not a separate/different scoring
+  // system) — mathematically, "pay the exact difference to everyone above
+  // you" nets out to: net_i = n*combined_i - sum(all combined). Verified
+  // zero-sum. This is what "The Ledger" shows as a signed $/dot amount.
+  function computeNetPositions(combined, n){
+    var total = combined.reduce(function(a,b){ return a+b; }, 0);
+    return combined.map(function(c){ return n*c - total; });
+  }
+
+  function computeCombinedDots(wolfGross, dotsGross, snakeHolder){
     var n = state.activePlayers;
     var combined = [];
     for(var i=0;i<n;i++){
@@ -2776,49 +3065,40 @@
       if(snakeHolder !== null && i !== snakeHolder) v += state.snakeStake;
       combined.push(v);
     }
+    return combined;
+  }
 
-    var order = [];
-    for(var i2=0;i2<n;i2++) order.push(i2);
-    order.sort(function(a,b){ return combined[b] - combined[a]; });
-
+  function renderPayouts(main, names, wolfGross, dotsGross, snakeHolder){
+    var n = state.activePlayers;
+    var combined = computeCombinedDots(wolfGross, dotsGross, snakeHolder);
     var useDollars = state.dollarPerPoint > 0;
     function fmt(amount){ return useDollars ? fmtDollars(amount * state.dollarPerPoint) : (amount + " dot" + (amount===1?"":"s")); }
 
-    var card = el("div", {class:"card"});
-    card.appendChild(el("h2", {}, ["💵 Payouts"]));
-    card.appendChild(el("div", {class:"note"}, [
+    var order = [];
+    for(var i2=0;i2<n;i2++) order.push(i2);
+    order.sort(function(a,b){ return combined[a] - combined[b]; }); // lowest first
+
+    var arrowCard = el("div", {class:"card"});
+    arrowCard.appendChild(el("h2", {}, ["Who pays whom"]));
+    var any = false;
+    order.forEach(function(pi){
+      for(var j=0;j<n;j++){
+        if(combined[j] > combined[pi]){
+          any = true;
+          var row = el("div", {class:"payout-arrow-row"});
+          row.appendChild(el("span", {}, [names[pi]]));
+          row.appendChild(el("span", {class:"arw"}, ["→"]));
+          row.appendChild(el("span", {}, [names[j]]));
+          row.appendChild(el("span", {class:"amt"}, [fmt(combined[j]-combined[pi])]));
+          arrowCard.appendChild(row);
+        }
+      }
+    });
+    if(!any) arrowCard.appendChild(el("div", {class:"note"}, ["Everyone's tied — nobody owes anybody yet."]));
+    arrowCard.appendChild(el("div", {class:"note"}, [
       "Ranked by total dots (Wolf gross wins + Dots" + (snakeHolder!==null ? ", plus " + state.snakeStake + " for everyone except whoever's holding the snake" : "") + "). Whoever has fewer dots owes the exact difference to whoever has more — pairwise, not just to the leader."
     ]));
-    order.forEach(function(pi, rank){
-      var row = el("div", {class:"totals-row"});
-      row.appendChild(el("div", {class:"name"}, [
-        el("span", {class:"eyebrow", style:"margin:0 8px 0 0; width:16px; display:inline-block;"}, ["#"+(rank+1)]),
-        el("span", {class:"swatch", style:"background:"+SWATCHES[pi]}), names[pi],
-        pi===snakeHolder ? el("span", {class:"eyebrow", style:"margin:0 0 0 6px; color:var(--flag);"}, ["🐍 pays everyone +" + state.snakeStake]) : null
-      ]));
-      row.appendChild(el("div", {class:"grand pos"}, [combined[pi] + " dots"]));
-      card.appendChild(row);
-    });
-    main.appendChild(card);
-
-    names.forEach(function(nm, pi){
-      var owed = [];
-      for(var j=0;j<n;j++){
-        if(j===pi) continue;
-        if(combined[j] > combined[pi]) owed.push({name:names[j], amount: combined[j]-combined[pi]});
-      }
-      if(owed.length === 0) return;
-      owed.sort(function(a,b){ return a.amount-b.amount; });
-      var pCard = el("div", {class:"card"});
-      pCard.appendChild(el("h2", {style:"font-size:14px;"}, [nm + " owes"]));
-      owed.forEach(function(o){
-        var row = el("div", {class:"totals-row"});
-        row.appendChild(el("div", {class:"name"}, [o.name]));
-        row.appendChild(el("div", {class:"grand neg"}, [fmt(o.amount)]));
-        pCard.appendChild(row);
-      });
-      main.appendChild(pCard);
-    });
+    main.appendChild(arrowCard);
   }
 
   function renderSummary(main){
@@ -2826,47 +3106,75 @@
     var wolfGross = computeWolfGrossWins();
     var dotRes = computeDotTotals();
     var holder = currentSnakeHolder();
+    var n = state.activePlayers;
+    var combined = computeCombinedDots(wolfGross, dotRes.totals, holder);
+    var net = computeNetPositions(combined, n);
+    var useDollars = state.dollarPerPoint > 0;
+    function fmt(amount){ return useDollars ? fmtDollars(amount * state.dollarPerPoint) : (Math.abs(amount) + " dot" + (Math.abs(amount)===1?"":"s")); }
+
+    var holesRecorded = 0;
+    for(var h=1; h<=18; h++){ if(holeHasData(h)) holesRecorded++; }
 
     var card = el("div", {class:"card"});
-    card.appendChild(el("h2", {}, ["Σ Round Ledger"]));
+    card.appendChild(el("h2", {}, ["The Ledger"]));
+    card.appendChild(el("div", {class:"note", style:"margin-bottom:6px;"}, ["Updates after every saved hole."]));
     names.forEach(function(nm, i){
-      var grand = wolfGross[i] + dotRes.totals[i];
-      var row = el("div", {class:"totals-row"});
-      var breakdown = "Wolf +" + wolfGross[i] +
-        "  ·  Dots +" + dotRes.totals[i] +
-        (holder === i ? "  ·  🐍 holding snake" : "");
-      row.appendChild(el("div", {}, [
-        el("div", {class:"name"}, [el("span", {class:"swatch", style:"background:"+SWATCHES[i]}), nm]),
-        el("div", {class:"breakdown"}, [breakdown])
-      ]));
-      row.appendChild(el("div", {class:"grand " + (grand>0?"pos":"zero")}, ["+" + grand]));
+      var row = el("div", {class:"ledger-row"});
+      row.appendChild(avatarChip(i, names));
+      row.appendChild(el("span", {class:"nm"}, [nm]));
+      var cls = net[i] > 0 ? "pos" : net[i] < 0 ? "neg" : "zero";
+      row.appendChild(el("span", {class:"amt " + cls}, [(net[i]>0?"+":net[i]<0?"−":"") + fmt(net[i])]));
       card.appendChild(row);
     });
-    card.appendChild(el("div", {class:"note"}, [
-      "Wolf shows gross points won (holes you won outright or as part of the winning team) — not net of what you paid on holes you lost. See Payouts below for what that actually means in owed dots or dollars."
-    ]));
     main.appendChild(card);
 
     renderPayouts(main, names, wolfGross, dotRes.totals, holder);
+
+    var pbCard = el("div", {class:"card"});
+    pbCard.appendChild(el("h2", {}, ["Point breakdown"]));
+    var pbTable = el("table", {class:"pb-table"});
+    var pbHead = el("tr");
+    pbHead.appendChild(el("th", {}, ["Player"]));
+    pbHead.appendChild(el("th", {}, ["Wolf"]));
+    pbHead.appendChild(el("th", {}, ["Dots"]));
+    pbHead.appendChild(el("th", {}, ["Snake"]));
+    pbTable.appendChild(pbHead);
+    names.forEach(function(nm, i){
+      var row = el("tr");
+      row.appendChild(el("td", {}, [nm]));
+      row.appendChild(el("td", {}, [String(wolfGross[i])]));
+      row.appendChild(el("td", {}, [String(dotRes.totals[i])]));
+      var snakeVal = (holder !== null && i !== holder) ? state.snakeStake : 0;
+      row.appendChild(el("td", {style: (i===holder ? "color:var(--flag);" : "")}, [i===holder ? "holding" : String(snakeVal)]));
+      pbTable.appendChild(row);
+    });
+    pbCard.appendChild(pbTable);
+    main.appendChild(pbCard);
+
+    var infoCard = el("div", {class:"card"});
+    infoCard.appendChild(el("div", {class:"info-box-row"}, [
+      el("span", {class:"l"}, ["Snake holder"]),
+      el("span", {class:"v"}, [holder !== null ? names[holder] : "—"])
+    ]));
+    infoCard.appendChild(el("div", {class:"info-box-row"}, [
+      el("span", {class:"l"}, ["Holes recorded"]),
+      el("span", {class:"v"}, [holesRecorded + " / 18"])
+    ]));
+    var totalPot = net.filter(function(x){ return x>0; }).reduce(function(a,b){ return a+b; }, 0);
+    infoCard.appendChild(el("div", {class:"info-box-row"}, [
+      el("span", {class:"l"}, ["Total pot tracked"]),
+      el("span", {class:"v"}, [fmt(totalPot)])
+    ]));
+    infoCard.appendChild(el("div", {class:"note", style:"margin-top:10px;"}, [n + " players · " + names.join(", ")]));
+    main.appendChild(infoCard);
 
     if(state.dollarPerPoint > 0){
       renderMoneyCard(main, names);
     }
 
-    if(holder !== null){
-      var sCard = el("div", {class:"card"});
-      sCard.appendChild(el("div", {class:"snake-holder", style:"margin-bottom:0;"}, [
-        el("div", {class:"icon"}, ["🐍"]),
-        el("div", {class:"txt"}, [
-          el("div", {class:"who"}, [names[holder]]),
-          el("div", {class:"lbl"}, ["CURRENTLY HOLDING THE SNAKE — pays everyone +" + state.snakeStake + " in Payouts above"])
-        ])
-      ]));
-      main.appendChild(sCard);
-    }
-
     renderScorecard(main);
   }
+
 
   // ---------------- EVENTS ----------------
   document.getElementById("prevHole").addEventListener("click", function(){
