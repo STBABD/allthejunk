@@ -991,7 +991,8 @@
     if(cb) cb();
   }
 
-  function loadArchivedRounds(){
+  function loadArchivedRounds(retriesLeft){
+    if(retriesLeft === undefined) retriesLeft = 3;
     if(!SYNC_CONFIG){ archivedRounds = []; render(); return; }
     ensureSync(function(){
       // NOTE: no .limitToLast()/.orderByChild() here on purpose — RTDB can't
@@ -1014,6 +1015,16 @@
           render();
         })
         .catch(function(e){
+          var code = e && e.code;
+          // Right after sign-in, the very first read can hit the database
+          // connection before it's actually carrying the fresh auth token —
+          // a genuine Firebase timing quirk, not a rules problem. Retrying
+          // a moment later almost always succeeds once the connection
+          // catches up, so we do that automatically before showing an error.
+          if(code === "PERMISSION_DENIED" && retriesLeft > 0){
+            setTimeout(function(){ loadArchivedRounds(retriesLeft - 1); }, 900);
+            return;
+          }
           console.error("archive load failed", e);
           archiveLoadError = (e && (e.code || e.message)) ? ((e.code || "") + " " + (e.message || "")).trim() : String(e);
           archivedRounds = [];
