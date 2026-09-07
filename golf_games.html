@@ -853,7 +853,7 @@
   // One-time bridge for rounds saved before login existed: any archive
   // entry with no ownerUid yet is claimable by whoever taps this first.
   function claimOrphanedRounds(cb){
-    if(!SYNC_CONFIG || !currentUser) { if(cb) cb(0); return; }
+    if(!SYNC_CONFIG || !currentUser) { if(cb) cb(0, null); return; }
     ensureSync(function(){
       syncDb.ref("archive").once("value").then(function(snap){
         var val = snap.val() || {};
@@ -862,12 +862,18 @@
         Object.keys(val).forEach(function(id){
           if(!val[id].ownerUid){ updates[id + "/ownerUid"] = currentUser.uid; count++; }
         });
-        if(count === 0){ if(cb) cb(0); return; }
+        if(count === 0){ if(cb) cb(0, null); return; }
         syncDb.ref("archive").update(updates).then(function(){
           archivedRounds = null;
-          if(cb) cb(count);
+          if(cb) cb(count, null);
+        }).catch(function(e){
+          console.error("claim update failed", e);
+          if(cb) cb(0, (e && (e.code || e.message)) ? ((e.code||"") + " " + (e.message||"")).trim() : String(e));
         });
-      }).catch(function(e){ console.error("claim failed", e); if(cb) cb(0); });
+      }).catch(function(e){
+        console.error("claim read failed", e);
+        if(cb) cb(0, (e && (e.code || e.message)) ? ((e.code||"") + " " + (e.message||"")).trim() : String(e));
+      });
     });
   }
 
@@ -1574,8 +1580,8 @@
     card.appendChild(el("button", {
       class:"ghost",
       onclick:function(){
-        claimOrphanedRounds(function(count){
-          claimMessage = count > 0 ? ("Claimed " + count + " round" + (count===1?"":"s") + ".") : "Nothing to claim — everything's already yours.";
+        claimOrphanedRounds(function(count, err){
+          claimMessage = err ? ("Couldn't check — " + err) : (count > 0 ? ("Claimed " + count + " round" + (count===1?"":"s") + ".") : "Nothing to claim — everything's already yours.");
           render();
         });
       }
@@ -1583,7 +1589,11 @@
     if(claimMessage){ card.appendChild(el("div", {class:"note"}, [claimMessage])); }
     if(archiveLoadError){
       card.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, [
-        "Couldn't load your rounds: " + archiveLoadError + ". This is usually a Firebase security rules mismatch — double-check the rules in your Firebase console match what was set up, and that you're signed in."
+        "Couldn't load your rounds: " + archiveLoadError + "."
+      ]));
+      card.appendChild(el("div", {class:"note", style:"font-family:monospace; background:var(--paper-2); padding:8px; border-radius:8px;"}, [
+        "Your signed-in UID: " + (currentUser ? currentUser.uid : "not signed in") +
+        " — compare this exactly against the ownerUid field on an entry under archive/ in Firebase's Data tab."
       ]));
     }
 
