@@ -855,17 +855,20 @@
   function claimOrphanedRounds(cb){
     if(!SYNC_CONFIG || !currentUser) { if(cb) cb(0, null); return; }
     ensureSync(function(){
-      syncDb.ref("archive").once("value").then(function(snap){
+      syncDb.ref("archiveUnclaimed").once("value").then(function(snap){
         var val = snap.val() || {};
+        var ids = Object.keys(val);
+        if(ids.length === 0){ if(cb) cb(0, null); return; }
         var updates = {};
-        var count = 0;
-        Object.keys(val).forEach(function(id){
-          if(!val[id].ownerUid){ updates[id + "/ownerUid"] = currentUser.uid; count++; }
+        ids.forEach(function(id){
+          var entry = val[id];
+          entry.ownerUid = currentUser.uid;
+          updates["archive/" + currentUser.uid + "/" + id] = entry;
+          updates["archiveUnclaimed/" + id] = null; // delete once moved
         });
-        if(count === 0){ if(cb) cb(0, null); return; }
-        syncDb.ref("archive").update(updates).then(function(){
+        syncDb.ref().update(updates).then(function(){
           archivedRounds = null;
-          if(cb) cb(count, null);
+          if(cb) cb(ids.length, null);
         }).catch(function(e){
           console.error("claim update failed", e);
           if(cb) cb(0, (e && (e.code || e.message)) ? ((e.code||"") + " " + (e.message||"")).trim() : String(e));
@@ -989,7 +992,7 @@
     ensureSync(function(){
       try{
         archiveStatus = "saving"; render();
-        syncDb.ref("archive").push(payload)
+        syncDb.ref("archive/" + currentUser.uid).push(payload)
           .then(function(){ archiveStatus = "saved"; archivedRounds = null; render(); })
           .catch(function(e){ archiveStatus = "error"; console.error("archive save failed", e); render(); });
       }catch(e){ archiveStatus = "error"; console.error("archive save failed", e); render(); }
@@ -998,18 +1001,14 @@
   }
 
   function loadArchivedRounds(retriesLeft){
-    if(retriesLeft === undefined) retriesLeft = 3;
+    if(retriesLeft === undefined) retriesLeft = 2;
     if(!SYNC_CONFIG){ archivedRounds = []; render(); return; }
+    if(!currentUser){ archivedRounds = []; render(); return; }
     ensureSync(function(){
-      // NOTE: no .limitToLast()/.orderByChild() here on purpose — RTDB can't
-      // apply our per-child ownerUid security rule to an indexed/limited
-      // query (it needs to know which children are allowed *before* it can
-      // pick "the last 30", which the rule can't answer up front), so any
-      // query modifier here gets the whole read rejected with
-      // PERMISSION_DENIED even though the rule itself is correct. A plain
-      // read on the node lets RTDB cascade the rule per-child as expected;
-      // we just sort/trim client-side instead.
-      syncDb.ref("archive").once("value")
+      // Reading archive/{myUid} directly — an exact path match against the
+      // rule, not a parent-of-a-child read — so this doesn't depend on any
+      // cascading behavior at all.
+      syncDb.ref("archive/" + currentUser.uid).once("value")
         .then(function(snap){
           var val = snap.val() || {};
           var list = Object.keys(val).map(function(k){
@@ -1022,11 +1021,9 @@
         })
         .catch(function(e){
           var code = e && e.code;
-          // Right after sign-in, the very first read can hit the database
-          // connection before it's actually carrying the fresh auth token —
-          // a genuine Firebase timing quirk, not a rules problem. Retrying
-          // a moment later almost always succeeds once the connection
-          // catches up, so we do that automatically before showing an error.
+          // Kept as a defensive retry for genuine transient network hiccups
+          // — not expected to be needed for permission issues anymore, since
+          // this is now a direct per-user path read.
           if(code === "PERMISSION_DENIED" && retriesLeft > 0){
             setTimeout(function(){ loadArchivedRounds(retriesLeft - 1); }, 900);
             return;
