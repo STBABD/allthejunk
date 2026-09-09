@@ -712,6 +712,8 @@
     roundName: "",
     courseName: "",
     gamesEnabled: {wolf:true, snake:true, dots:true, nassau:false},
+    nassau: {teamA:[0,2,4], teamB:[1,3,5], autoPress:false, autoPressThreshold:2, manualPresses:[]}, // player indices, alternating default split
+    nassauUnit: 1, // points awarded per segment (Front9/Back9/Overall) to the winning team
     holePar: {},               // hole -> 3/4/5
     holeHcp: {},                // hole -> stroke index 1-18
     wolf: {},                   // hole -> {wolf:idx, partners:[idx,...], result:'wolfwin'|'oppwin'|'push', manual:bool}
@@ -954,6 +956,11 @@
     if(state.snakeStake === undefined) state.snakeStake = 1;
         if(state.courseName === undefined) state.courseName = "";
         if(!state.gamesEnabled) state.gamesEnabled = {wolf:true, snake:true, dots:true, nassau:false};
+        if(!state.nassau) state.nassau = {teamA:[0,2,4], teamB:[1,3,5], autoPress:false, autoPressThreshold:2, manualPresses:[]};
+        if(state.nassau.autoPress === undefined) state.nassau.autoPress = false;
+        if(state.nassau.autoPressThreshold === undefined) state.nassau.autoPressThreshold = 2;
+        if(!state.nassau.manualPresses) state.nassau.manualPresses = [];
+        if(state.nassauUnit === undefined) state.nassauUnit = 1;
   }
 
   // ---------------- ROUND HISTORY (cross-device archive) ----------------
@@ -1088,6 +1095,11 @@
         if(state.snakeStake === undefined) state.snakeStake = 1;
         if(state.courseName === undefined) state.courseName = "";
         if(!state.gamesEnabled) state.gamesEnabled = {wolf:true, snake:true, dots:true, nassau:false};
+        if(!state.nassau) state.nassau = {teamA:[0,2,4], teamB:[1,3,5], autoPress:false, autoPressThreshold:2, manualPresses:[]};
+        if(state.nassau.autoPress === undefined) state.nassau.autoPress = false;
+        if(state.nassau.autoPressThreshold === undefined) state.nassau.autoPressThreshold = 2;
+        if(!state.nassau.manualPresses) state.nassau.manualPresses = [];
+        if(state.nassauUnit === undefined) state.nassauUnit = 1;
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
       } else {
         state = clone(defaultState);
@@ -1302,6 +1314,124 @@
       else carry = 1;
     }
     return carry;
+  }
+
+  // ---------------- NASSAU LOGIC ----------------
+  // Filters out any player index that's stale (equal on both teams, or out
+  // of range after a roster shrink) -- same defensive pattern as Wolf.
+  function nassauTeamsFor(){
+    var n = state.activePlayers;
+    var teamA = (state.nassau.teamA || []).filter(function(p){ return p < n; });
+    var teamB = (state.nassau.teamB || []).filter(function(p){ return p < n && teamA.indexOf(p) === -1; });
+    return {teamA: teamA, teamB: teamB};
+  }
+
+  // Net best-ball for a hole: each team's lowest net score represents them.
+  // Returns null if either team has no player with a score entered yet.
+  function nassauHoleResult(hole){
+    var teams = nassauTeamsFor();
+    function bestNet(team){
+      var vals = team.map(function(p){ return netFor(p, hole); }).filter(function(v){ return v !== null; });
+      if(vals.length === 0) return null;
+      return Math.min.apply(null, vals);
+    }
+    var aBest = bestNet(teams.teamA), bBest = bestNet(teams.teamB);
+    if(aBest === null || bBest === null) return null;
+    if(aBest < bBest) return "A";
+    if(bBest < aBest) return "B";
+    return "push";
+  }
+
+  // Tallies a segment (e.g. holes 1-9). "complete" is true only once every
+  // hole in range has a result -- that's the gate for actually awarding
+  // points, while aWins/bWins/holesWithResult can be shown live as progress
+  // before that.
+  // Simulates every match (the base bet, plus any presses) for a segment.
+  // A press is a fresh sub-match starting partway through, running to the
+  // same segment end as the base bet -- it doesn't replace the base bet,
+  // it's an additional side bet layered on top. Auto-presses trigger the
+  // hole AFTER either team first reaches the threshold margin in any
+  // currently-running match; manual presses are whatever the group calls.
+  // At most one new match starts per hole, however many matches happened
+  // to cross the threshold simultaneously, and a manual press already at
+  // that hole takes priority over adding a duplicate auto one.
+  function nassauMatchesForSegment(segStart, segEnd){
+    var matches = [{start:segStart, end:segEnd, isBase:true, manual:false, auto:false, aWins:0, bWins:0, halved:0, holesWithResult:0, hasSpawnedPress:false}];
+
+    (state.nassau.manualPresses || []).forEach(function(h){
+      if(h > segStart && h <= segEnd && !matches.some(function(m){ return m.start === h; })){
+        matches.push({start:h, end:segEnd, isBase:false, manual:true, auto:false, aWins:0, bWins:0, halved:0, holesWithResult:0, hasSpawnedPress:false});
+      }
+    });
+
+    var threshold = state.nassau.autoPressThreshold || 2;
+
+    for(var h = segStart; h <= segEnd; h++){
+      var r = nassauHoleResult(h);
+      if(r !== null){
+        matches.forEach(function(m){
+          if(m.start <= h && h <= m.end){
+            m.holesWithResult++;
+            if(r === "A") m.aWins++;
+            else if(r === "B") m.bWins++;
+            else m.halved++;
+          }
+        });
+      }
+      if(state.nassau.autoPress && h < segEnd){
+        var triggeringMatch = matches.find(function(m){
+          return m.start <= h && h <= m.end && !m.hasSpawnedPress && Math.abs(m.aWins - m.bWins) >= threshold;
+        });
+        if(triggeringMatch){
+          triggeringMatch.hasSpawnedPress = true;
+          if(!matches.some(function(m){ return m.start === h+1; })){
+            matches.push({start:h+1, end:segEnd, isBase:false, manual:false, auto:true, aWins:0, bWins:0, halved:0, holesWithResult:0, hasSpawnedPress:false});
+          }
+        }
+      }
+    }
+
+    matches.sort(function(a,b){ return a.start - b.start; });
+    matches.forEach(function(m){
+      m.totalHoles = m.end - m.start + 1;
+      m.complete = m.holesWithResult === m.totalHoles;
+      m.winner = null;
+      if(m.complete){
+        if(m.aWins > m.bWins) m.winner = "A";
+        else if(m.bWins > m.aWins) m.winner = "B";
+        else m.winner = "push";
+      }
+    });
+    return matches;
+  }
+
+  // The base match is always first after sorting (it starts earliest) --
+  // kept for any caller that only wants the plain segment result.
+  function nassauSegment(startHole, endHole){
+    return nassauMatchesForSegment(startHole, endHole)[0];
+  }
+
+  var NASSAU_SEGMENTS = [
+    {key:"front", label:"Front 9", start:1, end:9},
+    {key:"back", label:"Back 9", start:10, end:18},
+    {key:"overall", label:"Overall", start:1, end:18}
+  ];
+
+  // Gross wins only, same philosophy as Wolf/Dots: a segment's winning team
+  // each earn nassauUnit points; losers and pushes earn nothing.
+  function computeNassauGrossWins(){
+    var n = state.activePlayers;
+    var totals = new Array(n).fill(0);
+    var teams = nassauTeamsFor();
+    NASSAU_SEGMENTS.forEach(function(seg){
+      var matches = nassauMatchesForSegment(seg.start, seg.end);
+      matches.forEach(function(m){
+        if(!m.complete || m.winner === "push" || !m.winner) return;
+        var winningTeam = m.winner === "A" ? teams.teamA : teams.teamB;
+        winningTeam.forEach(function(p){ totals[p] += state.nassauUnit; });
+      });
+    });
+    return totals;
   }
 
   // Wolf scoring: each winning player earns a flat number of points based
@@ -1528,7 +1658,7 @@
         else if(activeSubTab === "wolf") renderWolf(main);
         else if(activeSubTab === "snake") renderSnake(main);
         else if(activeSubTab === "dots") renderDots(main);
-        else if(activeSubTab === "nassau") renderNassauPlaceholder(main);
+        else if(activeSubTab === "nassau") renderNassau(main);
       }
     }
   }
@@ -2215,7 +2345,7 @@
     card.appendChild(el("label", {class:"field-label"}, ["Games in play"]));
     card.appendChild(el("div", {class:"note", style:"margin-top:0;"}, ["Mix and match — pick any combination for this round."]));
     var gamesRow = el("div", {class:"choice-row"});
-    [["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau (coming soon)"]].forEach(function(g){
+    [["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau"]].forEach(function(g){
       gamesRow.appendChild(el("button", {
         class:"chip" + (state.gamesEnabled[g[0]] ? " selected":""),
         onclick:function(key){ return function(){
@@ -2226,6 +2356,57 @@
       }, [g[1]]));
     });
     card.appendChild(gamesRow);
+
+    if(state.gamesEnabled.nassau){
+      card.appendChild(el("label", {class:"field-label", style:"margin-top:14px;"}, ["Nassau teams"]));
+      card.appendChild(el("div", {class:"note", style:"margin-top:0;"}, ["Tap a player to move them between Team A and Team B."]));
+      var teamRow = el("div", {class:"choice-row"});
+      var teams = nassauTeamsFor();
+      for(var pi=0; pi<state.activePlayers; pi++){
+        (function(p){
+          var onA = teams.teamA.indexOf(p) !== -1;
+          teamRow.appendChild(el("button", {
+            class:"chip" + (onA ? " selected":""),
+            onclick:function(){
+              var t = nassauTeamsFor();
+              if(onA){
+                t.teamA = t.teamA.filter(function(x){ return x !== p; });
+                t.teamB.push(p);
+              } else {
+                t.teamB = t.teamB.filter(function(x){ return x !== p; });
+                t.teamA.push(p);
+              }
+              state.nassau = t;
+              saveState(); render();
+            }
+          }, [(state.players[p] || ("P"+(p+1))) + " · " + (onA ? "A" : "B")]));
+        })(pi);
+      }
+      card.appendChild(teamRow);
+
+      card.appendChild(el("label", {class:"field-label"}, ["Nassau points per segment"]));
+      card.appendChild(el("input", {
+        class:"name-input", type:"number", min:"1", style:"max-width:100px;",
+        value: state.nassauUnit,
+        oninput:function(e){ state.nassauUnit = parseInt(e.target.value,10) || 1; saveState(); }
+      }));
+
+      card.appendChild(el("label", {class:"field-label", style:"margin-top:10px;"}, ["Presses"]));
+      card.appendChild(el("div", {class:"note", style:"margin-top:0;"}, ["A press is a fresh side bet starting from a given hole to the end of that segment. Turn on auto-press to start one automatically whenever a team falls behind by the threshold — or call one manually anytime from the Nassau tab."]));
+      var pressChip = el("button", {
+        class:"chip" + (state.nassau.autoPress ? " selected":""),
+        onclick:function(){ state.nassau.autoPress = !state.nassau.autoPress; saveState(); render(); }
+      }, [state.nassau.autoPress ? "Auto-press: ON" : "Auto-press: OFF"]);
+      card.appendChild(el("div", {class:"choice-row"}, [pressChip]));
+      if(state.nassau.autoPress){
+        card.appendChild(el("label", {class:"field-label"}, ["Auto-press when down by"]));
+        card.appendChild(el("input", {
+          class:"name-input", type:"number", min:"1", style:"max-width:100px;",
+          value: state.nassau.autoPressThreshold,
+          oninput:function(e){ state.nassau.autoPressThreshold = parseInt(e.target.value,10) || 2; saveState(); }
+        }));
+      }
+    }
     card.appendChild(el("div", {class:"eyebrow"}, ["Group size"]));
     var sizeRow = el("div", {class:"choice-row"});
     [2,3,4,5,6].forEach(function(n){
@@ -2374,11 +2555,11 @@
     function doReset(){
       var players = state.players, handicaps = state.handicaps, st = state.snakeThresholds, ap = state.activePlayers,
           pts = state.points, wu = state.wolfUnit, ss = state.snakeStake, dpp = state.dollarPerPoint,
-          cn = state.courseName, ge = state.gamesEnabled;
+          cn = state.courseName, ge = state.gamesEnabled, nt = state.nassau, nu = state.nassauUnit;
       state = clone(defaultState);
       state.players = players; state.handicaps = handicaps; state.snakeThresholds = st; state.activePlayers = ap;
       state.points = pts; state.wolfUnit = wu; state.snakeStake = ss; state.dollarPerPoint = dpp;
-      state.courseName = cn; state.gamesEnabled = ge;
+      state.courseName = cn; state.gamesEnabled = ge; state.nassau = nt; state.nassauUnit = nu;
       if(goToDashboard){ activeTab = "dashboard"; activeSubTab = "setup"; }
       saveState(); render();
     }
@@ -2386,13 +2567,99 @@
     else doReset();
   }
 
-  function renderNassauPlaceholder(main){
-    main.appendChild(el("div", {class:"card"}, [
-      el("div", {class:"empty"}, [
-        el("div", {class:"big"}, ["🚧"]),
-        el("div", {}, ["Nassau scoring isn't built yet — this is just a placeholder so it doesn't silently do nothing. Enable it in Setup marks it as \"in play\" for the round, but no front-9/back-9/overall bets are tracked here yet. Ask to have this built if you want it working."])
-      ])
+  function renderNassau(main){
+    var names = activeNames();
+    var teams = nassauTeamsFor();
+    var teamAName = teams.teamA.map(function(p){ return names[p]; }).join(", ") || "—";
+    var teamBName = teams.teamB.map(function(p){ return names[p]; }).join(", ") || "—";
+
+    var card = el("div", {class:"card"});
+    card.appendChild(el("h2", {}, ["Nassau"]));
+    card.appendChild(el("div", {class:"note", style:"margin-bottom:10px;"}, [
+      "Net best-ball match play. Each hole is won by whichever team has the lower net score between its players; ties halve the hole. Front 9, Back 9, and Overall are each their own bet, worth " + state.nassauUnit + " pt" + (state.nassauUnit===1?"":"s") + " per player on the winning team once that segment is fully played."
     ]));
+    var rosterRow = el("div", {style:"display:flex; gap:10px; margin-bottom:14px;"});
+    rosterRow.appendChild(el("div", {class:"stat-light", style:"flex:1;"}, [
+      el("div", {class:"l"}, ["Team A"]), el("div", {style:"font-weight:700; font-size:13px; margin-top:2px;"}, [teamAName])
+    ]));
+    rosterRow.appendChild(el("div", {class:"stat-light", style:"flex:1;"}, [
+      el("div", {class:"l"}, ["Team B"]), el("div", {style:"font-weight:700; font-size:13px; margin-top:2px;"}, [teamBName])
+    ]));
+    card.appendChild(rosterRow);
+    main.appendChild(card);
+
+    var curSeg = NASSAU_SEGMENTS.find(function(seg){ return state.currentHole >= seg.start && state.currentHole <= seg.end; });
+    if(curSeg){
+      var curMatches = nassauMatchesForSegment(curSeg.start, curSeg.end);
+      var alreadyStartsHere = curMatches.some(function(m){ return m.start === state.currentHole; });
+      var pressCard = el("div", {class:"card"});
+      if(!alreadyStartsHere && state.currentHole < curSeg.end){
+        pressCard.appendChild(el("button", {
+          class:"primary", style:"margin:0;",
+          onclick:function(){
+            state.nassau.manualPresses.push(state.currentHole);
+            saveState(); render();
+          }
+        }, ["📣 Call a press — starts hole " + state.currentHole]));
+      } else if(alreadyStartsHere){
+        pressCard.appendChild(el("div", {class:"note", style:"margin:0;"}, ["A match already starts on this hole."]));
+      } else {
+        pressCard.appendChild(el("div", {class:"note", style:"margin:0;"}, ["No holes left in this segment to press."]));
+      }
+      if(state.nassau.manualPresses.length){
+        var mpRow = el("div", {style:"margin-top:10px; display:flex; gap:6px; flex-wrap:wrap;"});
+        state.nassau.manualPresses.slice().sort(function(a,b){return a-b;}).forEach(function(h){
+          mpRow.appendChild(el("button", {
+            class:"chip selected",
+            onclick:function(hh){ return function(){
+              state.nassau.manualPresses = state.nassau.manualPresses.filter(function(x){ return x !== hh; });
+              saveState(); render();
+            }; }(h)
+          }, ["Press @ " + h + " ✕"]));
+        });
+        pressCard.appendChild(mpRow);
+      }
+      main.appendChild(pressCard);
+    }
+
+    NASSAU_SEGMENTS.forEach(function(seg){
+      var matches = nassauMatchesForSegment(seg.start, seg.end);
+      var segCard = el("div", {class:"card"});
+      segCard.appendChild(el("h2", {}, [seg.label]));
+      matches.forEach(function(m){
+        var segRow = el("div", {class:"callout-row"});
+        var tag = m.isBase ? "Base" : (m.manual ? "Press (called)" : "Press (auto)");
+        var label = tag + " · hole " + m.start + "–" + m.end + " · " + m.holesWithResult + "/" + m.totalHoles;
+        var scoreText = m.aWins + " – " + m.bWins + (m.halved ? " (" + m.halved + " halved)" : "");
+        var statusText = !m.complete ? scoreText :
+          m.winner === "push" ? scoreText + " · Push" :
+          scoreText + " · " + (m.winner === "A" ? teamAName : teamBName) + " win";
+        segRow.appendChild(el("span", {class:"l"}, [label]));
+        segRow.appendChild(el("span", {class:"v", style: m.complete && m.winner !== "push" ? "color:var(--turf);" : ""}, [statusText]));
+        segCard.appendChild(segRow);
+      });
+      main.appendChild(segCard);
+    });
+
+    var holeCard = el("div", {class:"card"});
+    holeCard.appendChild(el("h2", {}, ["Hole by hole"]));
+    var table = el("table", {class:"scorecard", style:"width:100%;"});
+    var head = el("tr");
+    head.appendChild(el("th", {class:"label"}, ["Hole"]));
+    head.appendChild(el("th", {}, ["Winner"]));
+    table.appendChild(head);
+    for(var h=1; h<=18; h++){
+      var r = nassauHoleResult(h);
+      var row = el("tr", {class: h===state.currentHole ? "cur-hole" : ""});
+      row.appendChild(el("th", {class:"label"}, [String(h)]));
+      var cell = el("td", {style:"text-align:center;"}, [
+        r === null ? "—" : r === "push" ? "Halved" : (r === "A" ? "Team A" : "Team B")
+      ]);
+      row.appendChild(cell);
+      table.appendChild(row);
+    }
+    holeCard.appendChild(table);
+    main.appendChild(holeCard);
   }
 
   function renderRoundOverview(main){
@@ -2433,6 +2700,7 @@
     if(state.gamesEnabled.wolf) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Wolf " + state.wolfUnit + " pt"]));
     if(state.gamesEnabled.snake) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Snake " + state.snakeStake + " pt"]));
     if(state.gamesEnabled.dots) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Dots " + state.points.birdie + " pt birdie"]));
+    if(state.gamesEnabled.nassau) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Nassau " + state.nassauUnit + " pt/segment" + (state.nassau.autoPress ? " · auto-press @ " + state.nassau.autoPressThreshold : "")]));
     if(state.dollarPerPoint > 0) pillsRow.appendChild(el("span", {class:"stakes-pill"}, ["Base $" + state.dollarPerPoint.toFixed(2) + " / pt"]));
     head.appendChild(pillsRow);
 
@@ -3134,20 +3402,20 @@
     return combined.map(function(c){ return n*c - total; });
   }
 
-  function computeCombinedDots(wolfGross, dotsGross, snakeHolder){
+  function computeCombinedDots(wolfGross, dotsGross, snakeHolder, nassauGross){
     var n = state.activePlayers;
     var combined = [];
     for(var i=0;i<n;i++){
-      var v = wolfGross[i] + dotsGross[i];
+      var v = wolfGross[i] + dotsGross[i] + (nassauGross ? nassauGross[i] : 0);
       if(snakeHolder !== null && i !== snakeHolder) v += state.snakeStake;
       combined.push(v);
     }
     return combined;
   }
 
-  function renderPayouts(main, names, wolfGross, dotsGross, snakeHolder){
+  function renderPayouts(main, names, wolfGross, dotsGross, snakeHolder, nassauGross){
     var n = state.activePlayers;
-    var combined = computeCombinedDots(wolfGross, dotsGross, snakeHolder);
+    var combined = computeCombinedDots(wolfGross, dotsGross, snakeHolder, nassauGross);
     var useDollars = state.dollarPerPoint > 0;
     function fmt(amount){ return useDollars ? fmtDollars(amount * state.dollarPerPoint) : (amount + " dot" + (amount===1?"":"s")); }
 
@@ -3183,8 +3451,9 @@
     var wolfGross = state.gamesEnabled.wolf ? computeWolfGrossWins() : new Array(state.activePlayers).fill(0);
     var dotRes = state.gamesEnabled.dots ? computeDotTotals() : {totals: new Array(state.activePlayers).fill(0), counts: []};
     var holder = state.gamesEnabled.snake ? currentSnakeHolder() : null;
+    var nassauGross = state.gamesEnabled.nassau ? computeNassauGrossWins() : new Array(state.activePlayers).fill(0);
     var n = state.activePlayers;
-    var combined = computeCombinedDots(wolfGross, dotRes.totals, holder);
+    var combined = computeCombinedDots(wolfGross, dotRes.totals, holder, nassauGross);
     var net = computeNetPositions(combined, n);
     var useDollars = state.dollarPerPoint > 0;
     function fmt(amount){ return useDollars ? fmtDollars(amount * state.dollarPerPoint) : (Math.abs(amount) + " dot" + (Math.abs(amount)===1?"":"s")); }
@@ -3205,7 +3474,7 @@
     });
     main.appendChild(card);
 
-    renderPayouts(main, names, wolfGross, dotRes.totals, holder);
+    renderPayouts(main, names, wolfGross, dotRes.totals, holder, nassauGross);
 
     var pbCard = el("div", {class:"card"});
     pbCard.appendChild(el("h2", {}, ["Point breakdown"]));
@@ -3215,6 +3484,7 @@
     pbHead.appendChild(el("th", {}, ["Wolf"]));
     pbHead.appendChild(el("th", {}, ["Dots"]));
     pbHead.appendChild(el("th", {}, ["Snake"]));
+    pbHead.appendChild(el("th", {}, ["Nassau"]));
     pbTable.appendChild(pbHead);
     names.forEach(function(nm, i){
       var row = el("tr");
@@ -3223,6 +3493,7 @@
       row.appendChild(el("td", {}, [String(dotRes.totals[i])]));
       var snakeVal = (holder !== null && i !== holder) ? state.snakeStake : 0;
       row.appendChild(el("td", {style: (i===holder ? "color:var(--flag);" : "")}, [i===holder ? "holding" : String(snakeVal)]));
+      row.appendChild(el("td", {}, [String(nassauGross[i])]));
       pbTable.appendChild(row);
     });
     pbCard.appendChild(pbTable);
