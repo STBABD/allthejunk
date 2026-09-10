@@ -969,6 +969,9 @@
   // permanent snapshot per completed round, readable from any device.
   var archiveStatus = "idle"; // idle | saving | saved | error
   var archivedRounds = null;  // cached list once loaded
+  var courseLibrary = null;   // cached list of saved courses once loaded
+  var courseLibraryError = null;
+  var showUploadSection = false; // scorecard upload is now collapsed by default
   var archiveLoadError = null;
   var claimMessage = null;
   var courseSearchQuery = "";
@@ -977,6 +980,7 @@
   var courseLoadStatus = "idle";   // idle | loading | error | loaded
   var courseLoadDebug = null;      // raw JSON shown if we couldn't parse hole data, for troubleshooting
   var courseLoadParCount = 0;
+  var lastLoadedCourseId = null;
   var courseLoadHcpCount = 0;
   var viewingArchiveId = null;
   var savedLiveState = null;
@@ -1007,7 +1011,60 @@
     if(cb) cb();
   }
 
+  function loadCourseLibrary(){
+    if(!SYNC_CONFIG || !currentUser){ courseLibrary = []; render(); return; }
+    ensureSync(function(){
+      syncDb.ref("courseLibrary/" + currentUser.uid).once("value")
+        .then(function(snap){
+          var val = snap.val() || {};
+          var list = Object.keys(val).map(function(k){ var v = val[k]; v.id = k; return v; });
+          list.sort(function(a,b){ return (b.savedAt||0) - (a.savedAt||0); });
+          courseLibrary = list;
+          courseLibraryError = null;
+          render();
+        })
+        .catch(function(e){
+          console.error("course library load failed", e);
+          courseLibraryError = (e && (e.code || e.message)) ? ((e.code||"") + " " + (e.message||"")).trim() : String(e);
+          courseLibrary = [];
+          render();
+        });
+    });
+  }
+
+  // Saves (or updates, if a course with this exact name is already saved)
+  // the current hole Par/Stroke Index into the signed-in user's library.
+  function saveCourseToLibrary(name, holePar, holeHcp){
+    if(!SYNC_CONFIG || !currentUser || !name || !name.trim()) return;
+    ensureSync(function(){
+      var existing = (courseLibrary || []).find(function(c){ return c.name === name; });
+      var payload = {name: name, holePar: holePar, holeHcp: holeHcp, savedAt: Date.now()};
+      var ref = existing ? syncDb.ref("courseLibrary/" + currentUser.uid + "/" + existing.id) : syncDb.ref("courseLibrary/" + currentUser.uid).push();
+      ref.set(payload);
+      courseLibrary = null; // force a fresh reload next time it's shown
+    });
+  }
+
+  function deleteCourseFromLibrary(id){
+    if(!SYNC_CONFIG || !currentUser) return;
+    ensureSync(function(){
+      syncDb.ref("courseLibrary/" + currentUser.uid + "/" + id).remove().then(function(){
+        courseLibrary = (courseLibrary || []).filter(function(c){ return c.id !== id; });
+        render();
+      }).catch(function(e){ console.error("delete course failed", e); });
+    });
+  }
+
+  function applyCourseFromLibrary(entry){
+    Object.keys(entry.holePar || {}).forEach(function(h){ state.holePar[h] = entry.holePar[h]; });
+    Object.keys(entry.holeHcp || {}).forEach(function(h){ state.holeHcp[h] = entry.holeHcp[h]; });
+    if(!state.courseName.trim()) state.courseName = entry.name;
+    saveState(); render();
+  }
+
   function loadArchivedRounds(retriesLeft){
+
+
     if(retriesLeft === undefined) retriesLeft = 2;
     if(!SYNC_CONFIG){ archivedRounds = []; render(); return; }
     if(!currentUser){ archivedRounds = []; render(); return; }
@@ -1849,7 +1906,7 @@
           render();
           return;
         }
-        if(courseName && !state.courseName.trim()) state.courseName = courseName;
+        state.courseName = courseName || state.courseName; // always take the newly-picked result's own name, so switching between sibling courses stays unambiguous
         var parCount = 0, hcpCount = 0;
         Object.keys(holes).forEach(function(num){
           state.holePar[num] = holes[num].par;
@@ -1860,8 +1917,13 @@
         courseLoadStatus = "loaded";
         courseLoadParCount = parCount;
         courseLoadHcpCount = hcpCount;
-        courseSearchResults = null;
-        courseSearchQuery = "";
+        lastLoadedCourseId = courseId;
+        // Deliberately NOT clearing courseSearchResults here: if this course
+        // turns out to be missing Stroke Index, the facility may have a
+        // sibling course sitting right there in the same results (many
+        // complexes run two+ separate 18s under different names) -- clearing
+        // them would force a whole re-search just to try the next one.
+        saveCourseToLibrary(state.courseName, state.holePar, state.holeHcp);
         render();
       })
       .catch(function(e){
@@ -2109,6 +2171,7 @@
       if(h.hcp) state.holeHcp[num] = h.hcp;
     });
     saveState();
+    if(state.courseName.trim()) saveCourseToLibrary(state.courseName, state.holePar, state.holeHcp);
     scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null};
     render();
   }
@@ -2161,7 +2224,31 @@
 
     var courseCard = el("div", {class:"card"});
     courseCard.appendChild(el("h2", {}, ["⛳ Load a course"]));
-    courseCard.appendChild(el("div", {class:"note"}, ["Search OpenGolfAPI's free course database to auto-fill Par and Stroke Index for all 18 holes — no manual entry."]));
+
+    if(SYNC_CONFIG && currentUser){
+      if(courseLibrary === null){ loadCourseLibrary(); }
+      else if(courseLibrary.length > 0){
+        courseCard.appendChild(el("label", {class:"field-label"}, ["Your saved courses"]));
+        courseLibrary.forEach(function(c){
+          var row = el("div", {style:"display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px dotted var(--line);"});
+          row.appendChild(el("div", {
+            style:"font-weight:600; font-size:13.5px; cursor:pointer; flex:1;",
+            onclick:function(entry){ return function(){ applyCourseFromLibrary(entry); }; }(c)
+          }, [c.name]));
+          row.appendChild(el("button", {
+            class:"ghost", style:"margin:0; width:auto; padding:6px 10px; font-size:12px;",
+            onclick:function(id){ return function(){ if(confirm("Remove this course from your saved list?")) deleteCourseFromLibrary(id); }; }(c.id)
+          }, ["Remove"]));
+          courseCard.appendChild(row);
+        });
+        courseCard.appendChild(el("div", {class:"note"}, ["Tap a saved course to apply it instantly — no need to search again."]));
+      }
+      if(courseLibraryError){
+        courseCard.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, ["Couldn't load saved courses: " + courseLibraryError + "."]));
+      }
+    }
+
+    courseCard.appendChild(el("div", {class:"note", style:"margin-top:12px;"}, ["Search OpenGolfAPI's free course database to auto-fill Par for all 18 holes. Their open data rarely includes Stroke Index — expect to fill that in by hand or via a scorecard upload most of the time."]));
     var searchRow = el("div", {style:"display:flex; gap:8px; margin-top:10px;"});
     var searchInput = el("input", {
       class:"name-input", style:"margin-bottom:0;", type:"text", placeholder:"Course name",
@@ -2190,7 +2277,7 @@
           ? " Stroke Index filled in too."
           : courseLoadHcpCount > 0
             ? " Stroke Index filled in for " + courseLoadHcpCount + " of " + courseLoadParCount + " — enter the rest manually from your scorecard."
-            : " Stroke Index wasn't included by OpenGolfAPI for this course — enter it manually from your scorecard if you're using handicaps.")
+            : " Stroke Index wasn't included for this specific course entry. If this facility runs more than one course (many do), check the results below for a sibling — otherwise enter it manually from your scorecard.")
       ]));
     } else if(courseLoadStatus === "error"){
       courseCard.appendChild(el("div", {class:"note", style:"color:var(--flag);"}, ["Couldn't read hole data from that course's response. This means OpenGolfAPI's field names differ from what's expected — paste the debug output below back to Claude to fix the parsing."]));
@@ -2200,12 +2287,16 @@
     }
 
     if(courseSearchResults && courseSearchResults.length){
+      if(courseSearchResults.length > 1){
+        courseCard.appendChild(el("div", {class:"note", style:"margin-top:10px;"}, ["Some facilities run more than one course — if the one you picked is missing Stroke Index, try another result below before giving up."]));
+      }
       courseSearchResults.slice(0,8).forEach(function(c){
+        var isApplied = c.id === lastLoadedCourseId;
         var row = el("div", {
-          style:"padding:10px 0; border-bottom:1px dotted var(--line); cursor:pointer;",
+          style:"padding:10px 0; border-bottom:1px dotted var(--line); cursor:pointer;" + (isApplied ? " background:var(--gold-soft); border-radius:8px; padding-left:8px; padding-right:8px;" : ""),
           onclick:function(){ loadCourse(c.id, c.course_name || c.name); }
         });
-        row.appendChild(el("div", {style:"font-weight:600; font-size:13.5px;"}, [c.course_name || c.name]));
+        row.appendChild(el("div", {style:"font-weight:600; font-size:13.5px;"}, [(isApplied ? "✓ " : "") + (c.course_name || c.name)]));
         row.appendChild(el("div", {class:"breakdown"}, [[c.city, c.state].filter(Boolean).join(", ") + (c.par ? " · Par " + c.par : "")]));
         courseCard.appendChild(row);
       });
@@ -2216,7 +2307,15 @@
     main.appendChild(courseCard);
 
     var uploadCard = el("div", {class:"card"});
-    uploadCard.appendChild(el("h2", {}, ["📄 Or upload a scorecard"]));
+    var uploadExpanded = showUploadSection || scorecardUpload.status !== "idle";
+    uploadCard.appendChild(el("h2", {
+      style:"cursor:pointer; display:flex; justify-content:space-between; align-items:center;",
+      onclick:function(){ showUploadSection = !showUploadSection; render(); }
+    }, ["📄 Or upload a scorecard", el("span", {style:"font-size:13px; color:var(--ink-soft);"}, [uploadExpanded ? "▾" : "▸"])]));
+    if(!uploadExpanded){
+      uploadCard.appendChild(el("div", {class:"note", style:"margin:0;"}, ["Useful mainly for Stroke Index, since course search usually only has Par. Tap to expand."]));
+      main.appendChild(uploadCard);
+    } else {
     uploadCard.appendChild(el("div", {class:"note"}, [
       "Upload a photo or PDF of a scorecard (best with a clean, downloaded image or a text-based PDF, not a scanned copy). We'll pull out Par and Stroke Index for you to review before saving — always check it against the card."
     ]));
@@ -2292,6 +2391,7 @@
       }
     }
     main.appendChild(uploadCard);
+    }
 
     var courseSetupCard = el("div", {class:"card"});
     courseSetupCard.appendChild(el("h2", {}, ["📋 Course setup"]));
