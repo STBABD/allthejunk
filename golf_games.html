@@ -798,6 +798,23 @@
     ensureFirebaseCore(function(){ syncDb = authDb; cb(); });
   }
 
+  var functionsHandle = null;
+  function ensureFunctions(cb){
+    ensureFirebaseCore(function(){
+      if(functionsHandle){ cb(); return; }
+      if(typeof firebase.functions === "function"){ functionsHandle = firebase.functions(); cb(); return; }
+      var s = document.createElement("script");
+      s.src = "https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js";
+      s.onload = function(){ functionsHandle = firebase.functions(); cb(); };
+      s.onerror = function(){
+        scorecardUpload.status = "error";
+        scorecardUpload.errorMsg = "Couldn't load the scorecard-reading service — check your connection and try again.";
+        render();
+      };
+      document.head.appendChild(s);
+    });
+  }
+
   // ---------------- AUTH ----------------
   function initAuth(){
     if(!SYNC_CONFIG){ authReady = true; render(); return; } // no backend configured — nothing to gate
@@ -1812,7 +1829,7 @@
   var OPENGOLF_BASE = "https://api.opengolfapi.org/v1";
 
   // ---------------- SCORECARD UPLOAD (image/PDF -> par + stroke index) ----------------
-  var scorecardUpload = { status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null };
+  var scorecardUpload = { status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null, usedFallbackOcr:false };
   var showScorecardDebug = false;
   // idle | reading | parsing | ready | error
 
@@ -2084,22 +2101,32 @@
     var reader = new FileReader();
     reader.onload = function(){
       scorecardUpload.previewUrl = reader.result;
-      render();
-      ensureTesseract(function(){
-        scorecardUpload.status = "parsing"; render();
-        window.Tesseract.recognize(reader.result, "eng", {
-          tessedit_pageseg_mode: 6 // uniform block of text -- tends to do better on dense printed tables than full auto-segmentation
-        })
+      scorecardUpload.status = "parsing"; render();
+      var base64 = reader.result.split(",")[1];
+      ensureFunctions(function(){
+        var call = functionsHandle.httpsCallable("readScorecard");
+        call({imageBase64: base64, mediaType: file.type})
           .then(function(result){
-            var text = result.data.text;
-            scorecardUpload.rawText = text;
-            finishScorecardParse(text);
+            var holes = {};
+            (result.data.holes || []).forEach(function(h){
+              if(h.hole == null) return;
+              holes[h.hole] = {
+                par: h.par != null ? h.par : null,
+                hcp: h.stroke_index != null ? h.stroke_index : null
+              };
+            });
+            if(Object.keys(holes).length < 9){
+              throw new Error("AI vision returned too few readable holes (" + Object.keys(holes).length + ")");
+            }
+            scorecardUpload.holes = holes;
+            scorecardUpload.rawText = JSON.stringify(result.data.holes, null, 2);
+            scorecardUpload.status = "ready";
+            scorecardUpload.usedFallbackOcr = false;
+            render();
           })
           .catch(function(e){
-            console.error("ocr failed", e);
-            scorecardUpload.status = "error";
-            scorecardUpload.errorMsg = "Couldn't read text from that image — try a clearer, straight-on photo, or enter holes manually.";
-            render();
+            console.error("AI scorecard read failed, falling back to OCR", e);
+            fallbackToOcr(reader.result);
           });
       });
     };
@@ -2109,6 +2136,30 @@
       render();
     };
     reader.readAsDataURL(file);
+  }
+
+  // Falls back to local OCR if the AI vision function isn't reachable
+  // (not deployed yet, quota, outage, etc.) so scorecard upload keeps
+  // working either way -- just less reliably in this fallback path.
+  function fallbackToOcr(dataUrl){
+    ensureTesseract(function(){
+      scorecardUpload.status = "parsing"; render();
+      window.Tesseract.recognize(dataUrl, "eng", {
+        tessedit_pageseg_mode: 6
+      })
+        .then(function(result){
+          var text = result.data.text;
+          scorecardUpload.rawText = text;
+          scorecardUpload.usedFallbackOcr = true;
+          finishScorecardParse(text);
+        })
+        .catch(function(e){
+          console.error("ocr fallback also failed", e);
+          scorecardUpload.status = "error";
+          scorecardUpload.errorMsg = "Couldn't read this scorecard automatically — try a clearer photo, or enter holes manually.";
+          render();
+        });
+    });
   }
 
   // Best-effort: find the "Par" and "Handicap/Index" label in the extracted
@@ -2172,7 +2223,7 @@
     });
     saveState();
     if(state.courseName.trim()) saveCourseToLibrary(state.courseName, state.holePar, state.holeHcp);
-    scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null};
+    scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null, usedFallbackOcr:false};
     render();
   }
 
@@ -2317,7 +2368,7 @@
       main.appendChild(uploadCard);
     } else {
     uploadCard.appendChild(el("div", {class:"note"}, [
-      "Upload a photo or PDF of a scorecard (best with a clean, downloaded image or a text-based PDF, not a scanned copy). We'll pull out Par and Stroke Index for you to review before saving — always check it against the card."
+      "Upload a photo or PDF of a scorecard. Photos are read with AI vision, so even a phone photo of a real card usually works well — text-based PDFs are read directly (even more reliable). We'll pull out Par and Stroke Index for you to review before saving — always check it against the card."
     ]));
     if(scorecardUpload.status === "idle" || scorecardUpload.status === "error"){
       uploadCard.appendChild(el("input", {
@@ -2341,7 +2392,12 @@
       if(scorecardUpload.previewUrl){
         uploadCard.appendChild(el("img", {src: scorecardUpload.previewUrl, style:"max-width:100%; border-radius:10px; margin:10px 0;"}));
       }
-      uploadCard.appendChild(el("div", {class:"note"}, ["Review against the card above, fix anything wrong, then save. Leave a box blank to skip that hole."]));
+      uploadCard.appendChild(el("div", {class:"note", style: scorecardUpload.usedFallbackOcr ? "color:var(--flag);" : "color:var(--turf);"}, [
+        scorecardUpload.usedFallbackOcr
+          ? "⚠️ Read with basic text recognition (the AI reader wasn't available) — double-check every value carefully before saving."
+          : "✓ Read with AI vision — still worth a quick check against the card above before saving."
+      ]));
+      uploadCard.appendChild(el("div", {class:"note"}, ["Fix anything wrong, then save. Leave a box blank to skip that hole."]));
       var table = el("table", {class:"scorecard", style:"width:100%; margin-top:8px;"});
       var head = el("tr");
       head.appendChild(el("th", {class:"label"}, ["Hole"]));
@@ -2377,7 +2433,7 @@
       }, ["Save to round"]));
       btnRow.appendChild(el("button", {
         class:"ghost", style:"margin:0; width:auto; padding:12px 18px;",
-        onclick:function(){ scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null}; render(); }
+        onclick:function(){ scorecardUpload = {status:"idle", errorMsg:null, previewUrl:null, rawText:"", holes:null, usedFallbackOcr:false}; render(); }
       }, ["Cancel"]));
       uploadCard.appendChild(btnRow);
       if(scorecardUpload.rawText){
