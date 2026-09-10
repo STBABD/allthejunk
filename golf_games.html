@@ -2059,6 +2059,7 @@
       var reader = new FileReader();
       reader.onload = function(){
         var typedArray = new Uint8Array(reader.result);
+        var extractedText = "";
         window.pdfjsLib.getDocument({data: typedArray}).promise.then(function(pdf){
           return pdf.getPage(1).then(function(page){
             var viewport = page.getViewport({scale: 1.3});
@@ -2067,20 +2068,14 @@
             var ctx = canvas.getContext("2d");
             return page.render({canvasContext: ctx, viewport: viewport}).promise.then(function(){
               scorecardUpload.previewUrl = canvas.toDataURL();
-              return page.getTextContent();
+              return page.getTextContent().then(function(textContent){
+                extractedText = textContent.items.map(function(it){ return it.str; }).join(" ");
+                scorecardUpload.status = "parsing"; render();
+                var base64 = canvas.toDataURL("image/png").split(",")[1];
+                callAiVision(base64, "image/png", function(){ fallbackToPdfTextParsing(extractedText); });
+              });
             });
           });
-        }).then(function(textContent){
-          var text = textContent.items.map(function(it){ return it.str; }).join(" ");
-          if(text.trim().length < 10){
-            // no real text layer -- likely a scanned image saved as PDF
-            scorecardUpload.status = "error";
-            scorecardUpload.errorMsg = "This PDF doesn't have readable text in it (probably a scanned image). Try uploading it as an image (JPG/PNG) instead, or enter holes manually.";
-            render();
-            return;
-          }
-          scorecardUpload.rawText = text;
-          finishScorecardParse(text);
         }).catch(function(e){
           console.error("pdf read failed", e);
           scorecardUpload.status = "error";
@@ -2097,38 +2092,62 @@
     });
   }
 
+  // Last-resort fallback if the AI vision function isn't reachable at all --
+  // the regex-based text parsing this used to rely on as the primary path.
+  // Genuinely fragile on scorecards with unusual internal PDF text ordering
+  // (e.g. two Handicap rows with no "Ladies" label to bound the search), so
+  // AI vision is strongly preferred whenever it's available.
+  function fallbackToPdfTextParsing(text){
+    if(text.trim().length < 10){
+      scorecardUpload.status = "error";
+      scorecardUpload.errorMsg = "This PDF doesn't have readable text in it, and the AI reader wasn't available either. Try uploading it as an image, or enter holes manually.";
+      render();
+      return;
+    }
+    scorecardUpload.rawText = text;
+    scorecardUpload.usedFallbackOcr = true;
+    finishScorecardParse(text);
+  }
+
+  // Shared by both the image-upload path and the PDF path (which sends its
+  // rendered first page as an image too) -- calls the AI vision Cloud
+  // Function, applies its result, or invokes the given fallback on failure.
+  function callAiVision(base64, mediaType, onFallback){
+    ensureFunctions(function(){
+      var call = functionsHandle.httpsCallable("readScorecard");
+      call({imageBase64: base64, mediaType: mediaType})
+        .then(function(result){
+          var holes = {};
+          (result.data.holes || []).forEach(function(h){
+            if(h.hole == null) return;
+            holes[h.hole] = {
+              par: h.par != null ? h.par : null,
+              hcp: h.stroke_index != null ? h.stroke_index : null
+            };
+          });
+          if(Object.keys(holes).length < 9){
+            throw new Error("AI vision returned too few readable holes (" + Object.keys(holes).length + ")");
+          }
+          scorecardUpload.holes = holes;
+          scorecardUpload.rawText = JSON.stringify(result.data.holes, null, 2);
+          scorecardUpload.status = "ready";
+          scorecardUpload.usedFallbackOcr = false;
+          render();
+        })
+        .catch(function(e){
+          console.error("AI scorecard read failed, falling back", e);
+          onFallback();
+        });
+    });
+  }
+
   function readImageScorecard(file){
     var reader = new FileReader();
     reader.onload = function(){
       scorecardUpload.previewUrl = reader.result;
       scorecardUpload.status = "parsing"; render();
       var base64 = reader.result.split(",")[1];
-      ensureFunctions(function(){
-        var call = functionsHandle.httpsCallable("readScorecard");
-        call({imageBase64: base64, mediaType: file.type})
-          .then(function(result){
-            var holes = {};
-            (result.data.holes || []).forEach(function(h){
-              if(h.hole == null) return;
-              holes[h.hole] = {
-                par: h.par != null ? h.par : null,
-                hcp: h.stroke_index != null ? h.stroke_index : null
-              };
-            });
-            if(Object.keys(holes).length < 9){
-              throw new Error("AI vision returned too few readable holes (" + Object.keys(holes).length + ")");
-            }
-            scorecardUpload.holes = holes;
-            scorecardUpload.rawText = JSON.stringify(result.data.holes, null, 2);
-            scorecardUpload.status = "ready";
-            scorecardUpload.usedFallbackOcr = false;
-            render();
-          })
-          .catch(function(e){
-            console.error("AI scorecard read failed, falling back to OCR", e);
-            fallbackToOcr(reader.result);
-          });
-      });
+      callAiVision(base64, file.type, function(){ fallbackToOcr(reader.result); });
     };
     reader.onerror = function(){
       scorecardUpload.status = "error";
