@@ -695,6 +695,8 @@
     {key:"birdie", label:"Birdie"},
     {key:"eagle", label:"Eagle"},
     {key:"poley", label:"Poley"},
+    {key:"barky", label:"Barky"},
+    {key:"watery", label:"Watery"},
     {key:"threeputt", label:"3-Putt"}
   ];
   var SWATCHES = ["#2F6B45","#AC3B2A","#BE9A44","#3B5C8C","#7A4FA0","#2E8B8B"];
@@ -722,7 +724,7 @@
     snakeTieBreak: {},           // hole -> playerIdx who finished last among a putts-tie (takes the snake)
     snakeEvents: [],             // kept only for legacy data; derived automatically from putts now
     dots: {},                    // hole -> {playerIdx: {greenie:bool,...}}
-    points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, threeputt:1},
+    points: {greenie:1, sandy:1, birdie:1, eagle:2, poley:1, barky:1, watery:1, threeputt:1},
     wolfUnit: 1,
     snakeStake: 1,               // dots the end-of-round snake holder owes, folded into Payouts only
     dollarPerPoint: 0,
@@ -971,6 +973,8 @@
     if(!state.putts) state.putts = {};
     if(!state.snakeTieBreak) state.snakeTieBreak = {};
     if(state.snakeStake === undefined) state.snakeStake = 1;
+        if(state.points && state.points.barky === undefined) state.points.barky = 1;
+        if(state.points && state.points.watery === undefined) state.points.watery = 1;
         if(state.courseName === undefined) state.courseName = "";
         if(!state.gamesEnabled) state.gamesEnabled = {wolf:true, snake:true, dots:true, nassau:false};
         if(!state.nassau) state.nassau = {teamA:[0,2,4], teamB:[1,3,5], autoPress:false, autoPressThreshold:2, manualPresses:[]};
@@ -1001,6 +1005,8 @@
   var courseLoadHcpCount = 0;
   var viewingArchiveId = null;
   var savedLiveState = null;
+  var editingArchive = false;
+  var archiveEditStatus = null; // null | "saving" | "saved" | "error"
 
   function archiveRound(cb){
     if(!SYNC_CONFIG || !currentUser){ if(cb) cb(); return; }
@@ -1122,6 +1128,8 @@
     try{ state = JSON.parse(entry.state); }
     catch(e){ console.error("bad archived round", e); return; }
     viewingArchiveId = entry.id;
+    editingArchive = false;
+    archiveEditStatus = null;
     activeTab = "summary";
     render();
   }
@@ -1130,6 +1138,8 @@
     if(savedLiveState) state = savedLiveState;
     savedLiveState = null;
     viewingArchiveId = null;
+    editingArchive = false;
+    archiveEditStatus = null;
     render();
   }
 
@@ -1175,6 +1185,8 @@
         if(!state.nassau.manualPresses) state.nassau.manualPresses = [];
         if(state.nassauUnit === undefined) state.nassauUnit = 1;
         if(state.points && state.points.threeputt < 0) state.points.threeputt = Math.abs(state.points.threeputt);
+        if(state.points && state.points.barky === undefined) state.points.barky = 1;
+        if(state.points && state.points.watery === undefined) state.points.watery = 1;
       } else {
         state = clone(defaultState);
       }
@@ -1186,9 +1198,14 @@
 
   var saveTimer = null;
   function saveState(){
-    if(IS_VIEWER || IS_READONLY || viewingArchiveId) return;
+    if(IS_VIEWER || IS_READONLY) return;
+    if(viewingArchiveId && !editingArchive) return; // plain viewing stays read-only
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function(){
+      if(viewingArchiveId && editingArchive){
+        saveArchiveEdit();
+        return;
+      }
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
       catch(e){ console.error("save failed", e); }
       // if the SDK never loaded (e.g. no signal at startup), retry on each
@@ -1196,6 +1213,32 @@
       if(SYNC_CONFIG && state.shareCode && !syncDb) ensureSync(pushSync);
       else pushSync();
     }, 150);
+  }
+
+  // Writes the currently-loaded (edited) archived round back to its own
+  // entry in Firebase, at the same per-user path everything else uses.
+  function saveArchiveEdit(){
+    if(!SYNC_CONFIG || !currentUser || !viewingArchiveId) return;
+    ensureSync(function(){
+      archiveEditStatus = "saving"; render();
+      var payload = JSON.parse(JSON.stringify(state));
+      syncDb.ref("archive/" + currentUser.uid + "/" + viewingArchiveId).update({
+        state: JSON.stringify(payload),
+        roundName: payload.roundName.trim(),
+        courseName: payload.courseName.trim(),
+        gamesEnabled: payload.gamesEnabled,
+        players: payload.players.slice(0, payload.activePlayers),
+        updated: Date.now()
+      }).then(function(){
+        archiveEditStatus = "saved";
+        archivedRounds = null; // force a fresh reload so History reflects the edit
+        render();
+      }).catch(function(e){
+        console.error("archive edit save failed", e);
+        archiveEditStatus = "error";
+        render();
+      });
+    });
   }
 
   function activeNames(){
@@ -1557,6 +1600,13 @@
         DOT_KEYS.forEach(function(d){
           if(d.key === "threeputt" || d.key === "birdie" || d.key === "eagle") return;
           if(d.key === "greenie" && (state.holePar[h] || 4) !== 3) return;
+          // Greenie, Sandy, Barky, and Watery are all "recovery" dots that
+          // only count if the player still made par or better on the hole.
+          var needsPar = (d.key === "greenie" || d.key === "sandy" || d.key === "barky" || d.key === "watery");
+          if(needsPar){
+            var gCheck = grossFor(pi, parseInt(h,10));
+            if(gCheck === null || gCheck > (state.holePar[h] || 4)) return;
+          }
           if(holeData[pIdx][d.key]){
             totals[pi] += state.points[d.key];
             counts[pi][d.key]++;
@@ -1711,13 +1761,29 @@
       ]));
     }
     if(viewingArchiveId){
-      main.appendChild(el("div", {class:"card", style:"text-align:center; background:var(--gold-soft); border-color:var(--gold);"}, [
-        el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:#6b551f;"}, ["📜 Viewing an archived round — read-only"]),
-        el("button", {
-          class:"ghost", style:"margin-top:10px;",
-          onclick: backToLiveRound
-        }, ["← Back to current round"])
+      var arcCard = el("div", {class:"card", style:"text-align:center; background:var(--gold-soft); border-color:var(--gold);"});
+      arcCard.appendChild(el("div", {style:"font-family:'Fraunces',serif; font-weight:700; font-size:15px; color:#6b551f;"}, [
+        editingArchive ? "✏️ Editing an archived round" : "📜 Viewing an archived round — read-only"
       ]));
+      if(editingArchive){
+        var statusMsg = archiveEditStatus === "saving" ? "Saving…" :
+          archiveEditStatus === "saved" ? "Saved ✓" :
+          archiveEditStatus === "error" ? "Couldn't save — check your connection." : "Changes save automatically.";
+        arcCard.appendChild(el("div", {class:"note", style:"margin-top:4px; color:" + (archiveEditStatus==="error"?"var(--flag)":"#6b551f") + ";"}, [statusMsg]));
+      }
+      var arcBtnRow = el("div", {style:"display:flex; gap:8px; margin-top:10px; justify-content:center;"});
+      if(!editingArchive){
+        arcBtnRow.appendChild(el("button", {
+          class:"ghost", style:"margin:0; width:auto; padding:9px 16px;",
+          onclick:function(){ editingArchive = true; archiveEditStatus = null; render(); }
+        }, ["✎ Edit this round"]));
+      }
+      arcBtnRow.appendChild(el("button", {
+        class:"ghost", style:"margin:0; width:auto; padding:9px 16px;",
+        onclick: backToLiveRound
+      }, [editingArchive ? "✓ Done — back to current round" : "← Back to current round"]));
+      arcCard.appendChild(arcBtnRow);
+      main.appendChild(arcCard);
     }
     if(activeTab === "dashboard") renderDashboard(main);
     else if(activeTab === "history") renderHistory(main);
@@ -2059,6 +2125,7 @@
       var reader = new FileReader();
       reader.onload = function(){
         var typedArray = new Uint8Array(reader.result);
+        var extractedText = "";
         window.pdfjsLib.getDocument({data: typedArray}).promise.then(function(pdf){
           return pdf.getPage(1).then(function(page){
             var viewport = page.getViewport({scale: 1.3});
@@ -2067,20 +2134,14 @@
             var ctx = canvas.getContext("2d");
             return page.render({canvasContext: ctx, viewport: viewport}).promise.then(function(){
               scorecardUpload.previewUrl = canvas.toDataURL();
-              return page.getTextContent();
+              return page.getTextContent().then(function(textContent){
+                extractedText = textContent.items.map(function(it){ return it.str; }).join(" ");
+                scorecardUpload.status = "parsing"; render();
+                var base64 = canvas.toDataURL("image/png").split(",")[1];
+                callAiVision(base64, "image/png", function(){ fallbackToPdfTextParsing(extractedText); });
+              });
             });
           });
-        }).then(function(textContent){
-          var text = textContent.items.map(function(it){ return it.str; }).join(" ");
-          if(text.trim().length < 10){
-            // no real text layer -- likely a scanned image saved as PDF
-            scorecardUpload.status = "error";
-            scorecardUpload.errorMsg = "This PDF doesn't have readable text in it (probably a scanned image). Try uploading it as an image (JPG/PNG) instead, or enter holes manually.";
-            render();
-            return;
-          }
-          scorecardUpload.rawText = text;
-          finishScorecardParse(text);
         }).catch(function(e){
           console.error("pdf read failed", e);
           scorecardUpload.status = "error";
@@ -2097,38 +2158,62 @@
     });
   }
 
+  // Last-resort fallback if the AI vision function isn't reachable at all --
+  // the regex-based text parsing this used to rely on as the primary path.
+  // Genuinely fragile on scorecards with unusual internal PDF text ordering
+  // (e.g. two Handicap rows with no "Ladies" label to bound the search), so
+  // AI vision is strongly preferred whenever it's available.
+  function fallbackToPdfTextParsing(text){
+    if(text.trim().length < 10){
+      scorecardUpload.status = "error";
+      scorecardUpload.errorMsg = "This PDF doesn't have readable text in it, and the AI reader wasn't available either. Try uploading it as an image, or enter holes manually.";
+      render();
+      return;
+    }
+    scorecardUpload.rawText = text;
+    scorecardUpload.usedFallbackOcr = true;
+    finishScorecardParse(text);
+  }
+
+  // Shared by both the image-upload path and the PDF path (which sends its
+  // rendered first page as an image too) -- calls the AI vision Cloud
+  // Function, applies its result, or invokes the given fallback on failure.
+  function callAiVision(base64, mediaType, onFallback){
+    ensureFunctions(function(){
+      var call = functionsHandle.httpsCallable("readScorecard");
+      call({imageBase64: base64, mediaType: mediaType})
+        .then(function(result){
+          var holes = {};
+          (result.data.holes || []).forEach(function(h){
+            if(h.hole == null) return;
+            holes[h.hole] = {
+              par: h.par != null ? h.par : null,
+              hcp: h.stroke_index != null ? h.stroke_index : null
+            };
+          });
+          if(Object.keys(holes).length < 9){
+            throw new Error("AI vision returned too few readable holes (" + Object.keys(holes).length + ")");
+          }
+          scorecardUpload.holes = holes;
+          scorecardUpload.rawText = JSON.stringify(result.data.holes, null, 2);
+          scorecardUpload.status = "ready";
+          scorecardUpload.usedFallbackOcr = false;
+          render();
+        })
+        .catch(function(e){
+          console.error("AI scorecard read failed, falling back", e);
+          onFallback();
+        });
+    });
+  }
+
   function readImageScorecard(file){
     var reader = new FileReader();
     reader.onload = function(){
       scorecardUpload.previewUrl = reader.result;
       scorecardUpload.status = "parsing"; render();
       var base64 = reader.result.split(",")[1];
-      ensureFunctions(function(){
-        var call = functionsHandle.httpsCallable("readScorecard");
-        call({imageBase64: base64, mediaType: file.type})
-          .then(function(result){
-            var holes = {};
-            (result.data.holes || []).forEach(function(h){
-              if(h.hole == null) return;
-              holes[h.hole] = {
-                par: h.par != null ? h.par : null,
-                hcp: h.stroke_index != null ? h.stroke_index : null
-              };
-            });
-            if(Object.keys(holes).length < 9){
-              throw new Error("AI vision returned too few readable holes (" + Object.keys(holes).length + ")");
-            }
-            scorecardUpload.holes = holes;
-            scorecardUpload.rawText = JSON.stringify(result.data.holes, null, 2);
-            scorecardUpload.status = "ready";
-            scorecardUpload.usedFallbackOcr = false;
-            render();
-          })
-          .catch(function(e){
-            console.error("AI scorecard read failed, falling back to OCR", e);
-            fallbackToOcr(reader.result);
-          });
-      });
+      callAiVision(base64, file.type, function(){ fallbackToOcr(reader.result); });
     };
     reader.onerror = function(){
       scorecardUpload.status = "error";
@@ -2700,6 +2785,13 @@
       }
     }, ["Start new round (keep players, handicaps & settings)"]));
     main.appendChild(reset);
+
+    if(haveNames()){
+      main.appendChild(el("button", {
+        class:"primary", style:"margin-top:14px; background:var(--gold); color:var(--fairway); font-size:16px; padding:16px;",
+        onclick:function(){ activeSubTab = "score"; render(); }
+      }, ["⛳ Tee off →"]));
+    }
   }
 
   // Resets the current round's scoring data. If archiveFirst is true and the
@@ -2943,7 +3035,7 @@
         }));
         card.appendChild(el("span", {class:"putts-label"}, ["Putts"]));
         card.appendChild(el("input", {
-          class:"big-num-input", type:"number", placeholder:"—", min:"1", max:"10",
+          class:"big-num-input", type:"number", placeholder:"—", min:"0", max:"10",
           value: p === null ? "" : p,
           oninput: function(e){
             var v = e.target.value;
@@ -2959,10 +3051,32 @@
     main.appendChild(grid);
 
     main.appendChild(el("div", {class:"note", style:"margin-top:10px;"}, ["Change the numbers any time — they save automatically."]));
+
+    var navRow = el("div", {style:"display:flex; gap:8px; margin-top:6px;"});
+    navRow.appendChild(el("button", {
+      class:"ghost", style:"flex:1; margin:0;",
+      disabled: state.currentHole <= 1,
+      onclick:function(){
+        if(state.currentHole > 1){ state.currentHole--; activeSubTab = "score"; saveState(); render(); }
+      }
+    }, ["◀ Previous Hole"]));
+    navRow.appendChild(el("button", {
+      class:"primary", style:"flex:1; margin:0;",
+      disabled: state.currentHole >= 18,
+      onclick:function(){
+        if(state.currentHole < 18){ state.currentHole++; activeSubTab = "score"; saveState(); render(); }
+      }
+    }, ["Next Hole ▶"]));
+    main.appendChild(navRow);
+
     main.appendChild(el("button", {
-      class:"primary", style:"margin-top:6px;",
-      onclick:function(){ render(); }
-    }, ["✓ Update hole"]));
+      class:"ghost", style:"margin-top:8px; border-color:var(--gold); color:#6b551f;",
+      onclick:function(){
+        if(confirm("Complete this round? It'll be saved to History and a fresh round started.")){
+          startFreshRound(true, true);
+        }
+      }
+    }, ["🏆 Complete round"]));
 
     main.appendChild(el("div", {class:"note", style:"margin-top:12px;"}, [
       "Net score = gross − strokes received. Wolf auto-suggests a winner from net scores. Putts feed Snake and the 3-Putt dot automatically — each player's putt threshold is set in Setup."
@@ -3218,10 +3332,13 @@
     var par = state.holePar[hole] || 4;
     var pData = (state.dots[hole] && state.dots[hole][pi]) || {};
     var total = 0;
-    if(par === 3 && pData.greenie) total += state.points.greenie;
-    if(pData.sandy) total += state.points.sandy;
-    if(pData.poley) total += state.points.poley;
     var g = grossFor(pi, hole);
+    var madePar = g !== null && g <= par;
+    if(par === 3 && pData.greenie && madePar) total += state.points.greenie;
+    if(pData.sandy && madePar) total += state.points.sandy;
+    if(pData.barky && madePar) total += state.points.barky;
+    if(pData.watery && madePar) total += state.points.watery;
+    if(pData.poley) total += state.points.poley;
     if(g !== null){
       var diff = g - par;
       if(diff <= -2) total += state.points.eagle;
@@ -3284,8 +3401,22 @@
             var ddiff = g !== null ? g - par : null;
             var bon = d.key === "birdie" ? ddiff === -1 : (ddiff !== null && ddiff <= -2);
             td.appendChild(el("div", {class:"dotbox" + (bon?" on":"")}, [bon ? "●" : ""]));
-          } else if(d.key === "greenie" && par !== 3){
-            td.appendChild(el("div", {class:"dotbox", style:"opacity:0.25; cursor:default;"}, ["—"]));
+          } else if(d.key === "greenie" || d.key === "sandy" || d.key === "barky" || d.key === "watery"){
+            var gCheck2 = grossFor(pi, hole);
+            var madePar = gCheck2 !== null && gCheck2 <= par;
+            var wrongHoleType = (d.key === "greenie" && par !== 3);
+            if(wrongHoleType || !madePar){
+              td.appendChild(el("div", {class:"dotbox", style:"opacity:0.25; cursor:default;"}, ["—"]));
+            } else {
+              var onR = !!holeData[pi][d.key];
+              td.appendChild(el("div", {
+                class:"dotbox" + (onR?" on":""),
+                onclick:function(){
+                  holeData[pi][d.key] = !holeData[pi][d.key];
+                  saveState(); render();
+                }
+              }, [onR ? "●" : ""]));
+            }
           } else {
             var on = !!holeData[pi][d.key];
             td.appendChild(el("div", {
@@ -3301,9 +3432,9 @@
         table.appendChild(tr);
       })(p);
     }
-    card.appendChild(table);
+    card.appendChild(el("div", {class:"card-scroll"}, [table]));
     card.appendChild(el("div", {class:"note"}, [
-      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s (grayed out otherwise). 3-Putt is automatic from putts entered in the Score tab: the red box marks who 3-putted, and everyone else shows the dots they picked up from it. Each player's total dots for this hole shows under their name."
+      "Birdie and eagle are automatic from gross score vs. par — enter scores in the Score tab. Greenie only applies on par 3s. Greenie, Sandy, Barky, and Watery all require making par or better on the hole — grayed out otherwise. 3-Putt is automatic from putts entered in the Score tab: the red box marks who 3-putted, and everyone else shows the dots they picked up from it. Each player's total dots for this hole shows under their name."
     ]));
     main.appendChild(card);
 
@@ -3366,6 +3497,7 @@
     var n = state.activePlayers;
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Full Scorecard"]));
+    card.appendChild(el("div", {class:"note", style:"margin-top:0;"}, ["← Scroll sideways to see all 18 holes →"]));
 
     var scroll = el("div", {class:"card-scroll"});
     var table = el("table", {class:"scorecard"});
@@ -3682,10 +3814,10 @@
 
   // ---------------- EVENTS ----------------
   document.getElementById("prevHole").addEventListener("click", function(){
-    if(state.currentHole > 1){ state.currentHole--; saveState(); render(); }
+    if(state.currentHole > 1){ state.currentHole--; activeSubTab = "score"; saveState(); render(); }
   });
   document.getElementById("nextHole").addEventListener("click", function(){
-    if(state.currentHole < 18){ state.currentHole++; saveState(); render(); }
+    if(state.currentHole < 18){ state.currentHole++; activeSubTab = "score"; saveState(); render(); }
   });
   document.querySelectorAll("#tabbar button").forEach(function(b){
     b.addEventListener("click", function(){
