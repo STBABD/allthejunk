@@ -1256,6 +1256,12 @@
     return true;
   }
 
+  function defaultRoundName(){
+    var d = new Date().toLocaleDateString(undefined, {month:"short", day:"numeric", year:"numeric"});
+    var names = activeNames();
+    return names.length ? (d + " – " + names.join(", ")) : d;
+  }
+
   function holeHcpIndex(hole){
     return state.holeHcp[hole] || hole; // default to hole number until the user sets real stroke index
   }
@@ -2571,19 +2577,59 @@
 
     var card = el("div", {class:"card"});
     card.appendChild(el("h2", {}, ["Who's playing"]));
-    card.appendChild(el("label", {class:"field-label"}, ["Course name (optional)"]));
-    card.appendChild(el("input", {
-      class:"name-input", type:"text", placeholder:"e.g. Costa Mesa CC (Los Lagos)",
-      value: state.courseName,
-      oninput:function(e){ state.courseName = e.target.value; saveState(); }
-    }));
-    card.appendChild(el("label", {class:"field-label"}, ["Round name (optional)"]));
+
+    card.appendChild(el("div", {class:"eyebrow"}, ["Group size"]));
+    var sizeRow = el("div", {class:"choice-row"});
+    [2,3,4,5,6].forEach(function(n){
+      var chip = el("button", {
+        class:"chip" + (state.activePlayers===n ? " selected":""),
+        onclick:function(nn){ return function(){ state.activePlayers = nn; saveState(); render(); }; }(n)
+      }, [n + " players"]);
+      sizeRow.appendChild(chip);
+    });
+    card.appendChild(sizeRow);
+
+    card.appendChild(el("label", {class:"field-label"}, ["Names & handicap"]));
+    var labelRow = el("div", {class:"player-row", style:"margin-bottom:4px;"});
+    labelRow.appendChild(el("div", {style:"width:9px;"}));
+    labelRow.appendChild(el("div", {class:"eyebrow", style:"flex:1; margin:0;"}, ["Name"]));
+    labelRow.appendChild(el("div", {class:"eyebrow", style:"width:62px; text-align:center; margin:0;"}, ["HCP"]));
+    card.appendChild(labelRow);
+    for(var i=0;i<state.activePlayers;i++){
+      (function(idx){
+        var row = el("div", {class:"player-row"});
+        row.appendChild(el("div", {class:"swatch", style:"background:"+SWATCHES[idx]}));
+        row.appendChild(el("input", {
+          class:"name-input", type:"text", placeholder:"Player " + (idx+1),
+          value: state.players[idx] || "",
+          oninput: function(e){ state.players[idx] = e.target.value; saveState(); }
+        }));
+        row.appendChild(el("input", {
+          class:"hcp-input", type:"number", placeholder:"HCP", min:"0", max:"54",
+          value: state.handicaps[idx] || 0,
+          oninput: function(e){ state.handicaps[idx] = parseFloat(e.target.value)||0; saveState(); }
+        }));
+        card.appendChild(row);
+      })(i);
+    }
+    card.appendChild(el("div", {class:"note"}, [
+      "Handicap = each player's course handicap. On any hole, a player gets a stroke when that hole's Stroke Index (set at the top of the screen) is at or below their handicap — set Stroke Index per hole to match your scorecard. Everyone uses a standard 3-putt threshold for Snake and the 3-Putt dot."
+    ]));
+
+    if(haveNames() && !state.roundName.trim()){
+      state.roundName = defaultRoundName();
+    }
+    card.appendChild(el("label", {class:"field-label", style:"margin-top:14px;"}, ["Round name"]));
     card.appendChild(el("input", {
       class:"name-input", type:"text", placeholder:"e.g. Saturday skins",
       value: state.roundName,
       oninput:function(e){ state.roundName = e.target.value; saveState(); }
     }));
-    card.appendChild(el("label", {class:"field-label"}, ["Games in play"]));
+    if(state.courseName.trim()){
+      card.appendChild(el("div", {class:"note", style:"margin-top:-6px;"}, ["Course: " + state.courseName]));
+    }
+
+    card.appendChild(el("label", {class:"field-label", style:"margin-top:14px;"}, ["Games in play"]));
     card.appendChild(el("div", {class:"note", style:"margin-top:0;"}, ["Mix and match — pick any combination for this round."]));
     var gamesRow = el("div", {class:"choice-row"});
     [["wolf","Wolf"],["snake","Snake"],["dots","Dots"],["nassau","Nassau"]].forEach(function(g){
@@ -2648,50 +2694,6 @@
         }));
       }
     }
-    card.appendChild(el("div", {class:"eyebrow"}, ["Group size"]));
-    var sizeRow = el("div", {class:"choice-row"});
-    [2,3,4,5,6].forEach(function(n){
-      var chip = el("button", {
-        class:"chip" + (state.activePlayers===n ? " selected":""),
-        onclick:function(nn){ return function(){ state.activePlayers = nn; saveState(); render(); }; }(n)
-      }, [n + " players"]);
-      sizeRow.appendChild(chip);
-    });
-    card.appendChild(sizeRow);
-
-    card.appendChild(el("label", {class:"field-label"}, ["Names, handicap & snake putts"]));
-    var labelRow = el("div", {class:"player-row", style:"margin-bottom:4px;"});
-    labelRow.appendChild(el("div", {style:"width:9px;"}));
-    labelRow.appendChild(el("div", {class:"eyebrow", style:"flex:1; margin:0;"}, ["Name"]));
-    labelRow.appendChild(el("div", {class:"eyebrow", style:"width:62px; text-align:center; margin:0;"}, ["HCP"]));
-    labelRow.appendChild(el("div", {class:"eyebrow", style:"width:50px; text-align:center; margin:0;"}, ["Snake"]));
-    card.appendChild(labelRow);
-    for(var i=0;i<state.activePlayers;i++){
-      (function(idx){
-        var row = el("div", {class:"player-row"});
-        row.appendChild(el("div", {class:"swatch", style:"background:"+SWATCHES[idx]}));
-        row.appendChild(el("input", {
-          class:"name-input", type:"text", placeholder:"Player " + (idx+1),
-          value: state.players[idx] || "",
-          oninput: function(e){ state.players[idx] = e.target.value; saveState(); }
-        }));
-        row.appendChild(el("input", {
-          class:"hcp-input", type:"number", placeholder:"HCP", min:"0", max:"54",
-          value: state.handicaps[idx] || 0,
-          oninput: function(e){ state.handicaps[idx] = parseFloat(e.target.value)||0; saveState(); }
-        }));
-        row.appendChild(el("input", {
-          class:"hcp-input", type:"number", min:"1", max:"10",
-          value: state.snakeThresholds[idx] || 3,
-          style:"width:50px;",
-          oninput: function(e){ state.snakeThresholds[idx] = parseInt(e.target.value,10)||3; saveState(); }
-        }));
-        card.appendChild(row);
-      })(i);
-    }
-    card.appendChild(el("div", {class:"note"}, [
-      "Handicap = each player's course handicap. On any hole, a player gets a stroke when that hole's Stroke Index (set at the top of the screen) is at or below their handicap — set Stroke Index per hole to match your scorecard. Snake = number of putts before it counts against a player in Snake and the 3-Putt dot (default 3)."
-    ]));
     main.appendChild(card);
 
     var settings = el("div", {class:"card"});
@@ -2961,20 +2963,10 @@
       ]));
     }
     head.appendChild(pg);
+    head.appendChild(el("div", {class:"note", style:"margin-top:12px;"}, [
+      holesRecorded + " of 18 holes recorded"
+    ]));
     main.appendChild(head);
-
-    var hbh = el("div", {class:"hbh-card"});
-    hbh.appendChild(el("div", {class:"eyebrow"}, ["Hole by hole"]));
-    hbh.appendChild(el("h3", {}, ["Keep it honest."]));
-    hbh.appendChild(el("div", {class:"status-line"}, [holesRecorded + " of 18 holes recorded · Hole " + state.currentHole + " par " + par]));
-    hbh.appendChild(el("button", {
-      onclick:function(){
-        if(confirm("Complete this round? It'll be saved to History and a fresh round started.")){
-          startFreshRound(true, true);
-        }
-      }
-    }, ["🏆 Complete round"]));
-    main.appendChild(hbh);
   }
 
   function renderScore(main){
