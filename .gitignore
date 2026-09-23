@@ -8,3 +8,12 @@ build/
 venv/
 .pytest_cache/
 .coverage
+
+# Mac
+.DS_Store
+
+# Firebase / Node
+node_modules/
+functions/.env*
+functions/.runtimeconfig.json
+*.log
